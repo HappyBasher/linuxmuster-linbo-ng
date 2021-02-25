@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 #
 # thomas@linuxmuster.net
-# 20210206
+# 20210224
 # GPL v3
 #
 
@@ -16,16 +16,13 @@ LVERS=$(shell head -n 1 debian/changelog | awk -F\( '{ print $$2 }' | awk -F\) '
 LRELNAME=$(shell cat debian/releasename)
 
 # kernel
-VESAMODE=785 # 640x480, 64k colors
+#VESAMODE=785 # 640x480, 64k colors
 #VESAMODE=771 # 800x600, 256 colors
 # VESAMODE=0 # VGA16
-# VESAMODE=791 # 1024x768, 64k colors # Currently not working
+VESAMODE=791 # 1024x768, 64k colors # Currently not working
 KERNEL_ARCHIVE=$(shell grep " linux-" debian/md5sums.src | awk '{ print $$2 }')
 KVERS=$(shell echo $(KERNEL_ARCHIVE) | sed -e 's/linux-//' | sed -e 's/.tar.xz//')
 KMAINVERS=$(shell echo $(KVERS) | sed -e 's/.0$$//')
-KERNEL_DIR=kernel/linux-$(KVERS)
-# kernel non pae
-KERNELNP_DIR=kernel-np/linux-$(KVERS)
 # kernel64
 KERNEL64_DIR=kernel64/linux-$(KVERS)
 #KERNEL_URL=https://www.kernel.org/pub/linux/kernel/v4.x
@@ -44,36 +41,12 @@ KERNEL_URL=$(LML_URL)
 ### integrate cloop in LMN
 CLOOP_ARCHIVE=$(shell grep cloop_ debian/md5sums.src | awk '{ print $$2 }')
 CLOOP_VERSION=$(shell echo $(CLOOP_ARCHIVE) | awk -F_ '{ print $$2 }' | sed -e 's/.tar.xz//')
-#CLOOP_ARCHIVE=$(shell grep cloop- debian/md5sums.src | awk '{ print $$2 }')
-#CLOOP_DIR=kernel/cloop
-#CLOOP_DIR=kernel/$(shell echo $(CLOOP_ARCHIVE) | sed -e 's/.tar.gz//')
-CLOOP_DIR=kernel/cloop-$(CLOOP_VERSION)
-# cloop non pae
-#CLOOPNP_DIR=kernel-np/$(shell echo $(CLOOP_ARCHIVE) | sed -e 's/.tar.gz//')
-CLOOPNP_DIR=kernel-np/cloop-$(CLOOP_VERSION)
-# cloop64
-#CLOOP64_DIR=kernel64/cloop-$(shell echo $(CLOOP_ARCHIVE) | awk -F_ '{ print $$2 }' | sed -e 's/-2.tar.gz//')
 CLOOP64_DIR=kernel64/cloop-$(CLOOP_VERSION)
 ###CLOOP_URL=http://ftp.de.debian.org/debian/pool/main/c/cloop
 CLOOP_URL=$(LML_URL)
 
-# qt
-QT_ARCHIVE=$(shell grep qt- debian/md5sums.src | awk '{ print $$2 }')
-QT_DIR=linbo_gui32/$(shell echo $(QT_ARCHIVE) | sed -e 's/.tar.gz//')
-QT_VERS=$(shell echo $(QT_ARCHIVE) | sed -e 's/qt-everywhere-opensource-src-//' | sed -e 's/.tar.gz//')
-#QT_URL=http://download.qt-project.org/official_releases/qt/4.8/$(QT_VERS)
-QT_URL=https://download.qt.io/archive/qt/4.8/$(QT_VERS)
-# qt64
-QT64_DIR=linbo_gui64/$(shell echo $(QT_ARCHIVE) | sed -e 's/.tar.gz//')
-
-# gui archives
-GUI32_ARCHIVE=linbo_gui32/linbo_gui32.tar.lz
-GUI64_ARCHIVE=linbo_gui64/linbo_gui64.tar.lz
-
 # busybox
 BB_ARCHIVE=$(shell grep busybox- debian/md5sums.src | awk '{ print $$2 }')
-BB_DIR=src/$(shell echo $(BB_ARCHIVE) | sed -e 's/.tar.bz2//')
-#BB_URL=http://busybox.net/downloads
 BB_URL=$(LML_URL)
 
 #busybox64
@@ -81,43 +54,18 @@ BB64_DIR=src64/$(shell echo $(BB_ARCHIVE) | sed -e 's/.tar.bz2//')
 
 # chntpw
 CHNTPW_ARCHIVE=$(shell grep chntpw- debian/md5sums.src | awk '{ print $$2 }')
-#CHNTPW_DIR=src/$(shell echo $(CHNTPW_ARCHIVE) | sed -e 's/-source//' | sed -e 's/.zip//')
-CHNTPW_DIR=src/$(shell echo $(CHNTPW_ARCHIVE)  | sed -e 's/.zip//')
-# TODO: Better source for this...
 CHNTPW_URL=http://archive.linuxmuster.net/linbo-build-cache
-
-# chntpw64
-#CHNTPW64_DIR=src64/$(shell echo $(CHNTPW_ARCHIVE) | sed -e 's/-source//' | sed -e 's/.zip//')
 CHNTPW64_DIR=src64/$(shell echo $(CHNTPW_ARCHIVE)  | sed -e 's/.zip//')
-
-# ms-sys
-MSSYS_ARCHIVE=$(shell grep ms-sys- debian/md5sums.src | awk '{ print $$2 }')
-MSSYS_DIR=src/$(shell echo $(MSSYS_ARCHIVE) | sed -e 's/.tar.gz//')
-MSSYS_URL=$(LML_URL)
 
 # ntfs-3g
 NTFS3G_ARCHIVE=$(shell grep ntfs-3g_ntfsprogs- debian/md5sums.src | awk '{ print $$2 }')
-NTFS3G_DIR=src/$(shell echo $(NTFS3G_ARCHIVE) | sed -e 's/.tgz//')
 NTFS3G_URL=http://tuxera.com/opensource
-
-# ntfs-3g64
 NTFS3G64_DIR=src64/$(shell echo $(NTFS3G_ARCHIVE) | sed -e 's/.tgz//')
 
 # lsaSecrets
 LSASECRETS_ARCHIVE=$(shell grep lsaSecrets debian/md5sums.src | awk '{ print $$2 }')
-LSASECRETS_DIR=src/$(shell echo $(LSASECRETS_ARCHIVE) | sed -e 's/.zip//')
+LSASECRETS_DIR=src64/$(shell echo $(LSASECRETS_ARCHIVE) | sed -e 's/.zip//')
 LSASECRETS_URL=https://github.com/linuxmuster/lsaSecrets/archive/master.zip
-
-# 32bit toolchain & binaries
-TOOLCHAIN=$(CURDIR)/toolchain
-BIN32_DIR=$(CURDIR)/src/bin32
-BIN32_DEBS=acl bc bluez bvi cloop-utils coreutils ctorrent dosfstools dropbear-bin \
-	e2fsprogs efibootmgr ethtool gdisk grub-pc grub-pc-bin grub-common grub-efi-ia32-bin \
-	grub2-common hdparm kmod libc-bin libcom-err2 libext2fs2 libefiboot1 libefivar1 \
-	libgmp10 libgpod-common libmtp-runtime libnetpbm10 libparted2 libpci3 libpng16-16 \
-	libpopt0 libpopt-dev libpng-dev libtomcrypt1 libtommath1 mount netpbm ncurses-bin parted pcmciautils \
-	reiserfsprogs rsync systemd sysvinit-utils udev udpcast util-linux \
-	uuid-runtime uuid-dev libz3-dev libpopt-dev  zlib1g zlib1g-dev
 
 # linbofs files for initramfs
 LINBOINITRAMFS=$(CURDIR)/cache/linbo_initramfs.conf
@@ -126,50 +74,12 @@ configure: configure-stamp
 configure-stamp:
 	dh_testdir
 
-	# setup 32bit build tool chain
-	ln -sf /usr/bin/ar $(TOOLCHAIN)/i386-linux-gnu-ar
-	ln -sf /usr/bin/strip $(TOOLCHAIN)/i386-linux-gnu-strip
-	#ln -sf i386-linux-gnu-gcc $(TOOLCHAIN)/gcc
-	#ln -sf i386-linux-gnu-g++ $(TOOLCHAIN)/g++
-	#ln -sf i386-linux-gnu-c++ $(TOOLCHAIN)/c++
-
 	# make necessary build dirs
 	mkdir -p cache || true
-	mkdir -p kernel || true
-	mkdir -p kernel-np || true
 	mkdir -p kernel64 || true
-	mkdir -p src || true
 	mkdir -p src64 || true
-	mkdir -p linbo_gui32 || true
-	mkdir -p linbo_gui64 || true
-	mkdir -p $(BIN32_DIR) || true
-
-	# setup 32bit linbo_gui dir
-	-@if [ ! -e linbo_gui32/build_gui ]; then \
-		echo "[1mCreating 32bit linbo_gui...[0m" ; \
-		cp -R linbo_gui/* linbo_gui32; \
-	fi
-
-	# setup 64bit linbo_gui dir
-	-@if [ ! -e linbo_gui64/build_gui ]; then \
-		echo "[1mCreating 64bit linbo_gui...[0m" ; \
-		cp -R linbo_gui/* linbo_gui64; \
-		(cd linbo_gui64 && patch -p2 <$(CURDIR)/patches/linbo_gui64.patch); \
-	fi
 
 	# download and unpack sources
-
-	# busybox
-	-@if [ ! -d $(BB_DIR) ]; then \
-		( [ -e cache/$(BB_ARCHIVE) ] || ( cd cache && wget $(BB_URL)/$(BB_ARCHIVE) ) ); \
-		( cd cache && grep $(BB_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking $(BB_ARCHIVE)...[0m" ; \
-		tar xf cache/$(BB_ARCHIVE) -C src; \
-		echo "[1mPatching busybox sources...[0m" ; \
-		( cd $(BB_DIR) && for i in ../../patches/busybox/*; do patch -p1 <$$i; done ); \
-		cp conf/busybox.conf $(BB_DIR)/.config; \
-		ln -sf ../$(BB_DIR) src/busybox; \
-	fi
 
 	# busybox64
 	-@if [ ! -d $(BB64_DIR) ]; then \
@@ -183,16 +93,6 @@ configure-stamp:
 		ln -sf ../$(BB64_DIR) src64/busybox; \
 	fi
 
-	# chntpw
-	 echo debug1
-	-@if [ ! -d $(CHNTPW_DIR) ]; then \
-		( [ -e cache/$(CHNTPW_ARCHIVE) ] || ( cd cache && wget $(CHNTPW_URL)/$(CHNTPW_ARCHIVE) ) ); \
-		( cd cache && grep $(CHNTPW_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking $(CHNTPW_ARCHIVE)...[0m" ; \
-		( cd src && unzip ../cache/$(CHNTPW_ARCHIVE) ); \
-		ln -sf ../$(CHNTPW_DIR) src/chntpw; \
-	fi
-
 	# chntpw64
 	-@if [ ! -d $(CHNTPW64_DIR) ]; then \
 		( [ -e cache/$(CHNTPW_ARCHIVE) ] || ( cd cache && wget $(CHNTPW_URL)/$(CHNTPW_ARCHIVE) ) ); \
@@ -202,27 +102,6 @@ configure-stamp:
 		ln -sf ../$(CHNTPW64_DIR) src64/chntpw; \
 		echo "[1mPatching chntpw64 sources...[0m" ; \
 		( cd $(CHNTPW64_DIR) && for i in ../../patches/chntpw64/*; do patch -p1 <$$i; done ); \
-	fi
-
-
-	# ms-sys
-	-@if [ ! -d $(MSSYS_DIR) ]; then \
-		( [ -e cache/$(MSSYS_ARCHIVE) ] || ( cd cache && wget $(MSSYS_URL)/$(MSSYS_ARCHIVE) ) ); \
-		( cd cache && grep $(MSSYS_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking $(MSSYS_ARCHIVE)...[0m" ; \
-		tar xf cache/$(MSSYS_ARCHIVE) -C src; \
-		echo "[1mPatching $(MSSYS_ARCHIVE)...[0m" ; \
-		( cd $(MSSYS_DIR) && patch -p0 <../../patches/ms-sys32.patch ); \
-		ln -sf ../$(MSSYS_DIR) src/ms-sys; \
-	fi
-
-	# ntfs-3g
-	-@if [ ! -d $(NTFS3G_DIR) ]; then \
-		( [ -e cache/$(NTFS3G_ARCHIVE) ] || ( cd cache && wget $(NTFS3G_URL)/$(NTFS3G_ARCHIVE) ) ); \
-		( cd cache && grep $(NTFS3G_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking $(NTFS3G_ARCHIVE)...[0m" ; \
-		tar xf cache/$(NTFS3G_ARCHIVE) -C src; \
-		ln -sf ../$(NTFS3G_DIR) src/ntfs-3g; \
 	fi
 
 	# ntfs-3g64
@@ -239,56 +118,7 @@ configure-stamp:
 		( [ -e cache/$(LSASECRETS_ARCHIVE) ] || ( cd cache && wget $(LSASECRETS_URL) -O $(LSASECRETS_ARCHIVE) ) ); \
 		( cd cache && grep $(LSASECRETS_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
 		echo "[1mUnpacking $(LSASECRETS_ARCHIVE)...[0m" ; \
-		( cd src && unzip ../cache/$(LSASECRETS_ARCHIVE) ); \
-	fi
-
-	# qt32
-	-@if [ ! -d $(QT_DIR) ]; then \
-		( [ -e cache/$(QT_ARCHIVE) ] || ( cd cache && wget $(QT_URL)/$(QT_ARCHIVE) ) ); \
-		( cd cache && grep $(QT_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking 32bit $(QT_ARCHIVE)...[0m" ; \
-		tar xf cache/$(QT_ARCHIVE) -C linbo_gui32; \
-	fi
-
-	# qt64
-	-@if [ ! -d $(QT64_DIR) ]; then \
-		( [ -e cache/$(QT_ARCHIVE) ] || ( cd cache && wget $(QT_URL)/$(QT_ARCHIVE) ) ); \
-		( cd cache && grep $(QT_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking 64bit $(QT_ARCHIVE)...[0m" ; \
-		tar xf cache/$(QT_ARCHIVE) -C linbo_gui64; \
-	fi
-
-	# cloop
-	#-@if [ ! -d $(CLOOP_DIR) ]; then \
-	#	git clone https://github.com/PLanB2008/cloop kernel/cloop;\
-	#fi
-		#( [ -e cache/$(CLOOP_ARCHIVE) ] || ( cd cache && wget $(CLOOP_URL)/$(CLOOP_ARCHIVE) ) ); \
-		#( cd cache && grep $(CLOOP_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		#echo "[1mUnpacking $(CLOOP_ARCHIVE)...[0m" ; \
-		#tar xf cache/$(CLOOP_ARCHIVE) -C kernel; \
-		#ln -sf ../$(CLOOP_DIR) kernel/cloop; \
-
-	# cloop with patch
-	-@if [ ! -d $(CLOOP_DIR) ]; then \
-		( [ -e cache/$(CLOOP_ARCHIVE) ] || ( cd cache && wget $(CLOOP_URL)/$(CLOOP_ARCHIVE) ) ); \
-		( cd cache && grep $(CLOOP_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking $(CLOOP_ARCHIVE)...[0m" ; \
-		tar xf cache/$(CLOOP_ARCHIVE) -C kernel; \
-		( cd $(CLOOP_DIR) && for i in ../../patches/cloop/*; do patch -p1 <$$i; done ); \
-		ln -sf ../$(CLOOP_DIR) kernel/cloop; \
-	fi
-
-	# cloop non pae
-	#-@if [ ! -d $(CLOOPNP_DIR) ]; then \
-	#	git clone https://github.com/PLanB2008/cloop kernel-np/cloop;\
-	#fi
-	-@if [ ! -d $(CLOOPNP_DIR) ]; then \
-		( [ -e cache/$(CLOOP_ARCHIVE) ] || ( cd cache && wget $(CLOOP_URL)/$(CLOOP_ARCHIVE) ) ); \
-		( cd cache && grep $(CLOOP_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking $(CLOOP_ARCHIVE)...[0m" ; \
-		tar xf cache/$(CLOOP_ARCHIVE) -C kernel-np; \
-		( cd $(CLOOPNP_DIR) && for i in ../../patches/cloop/*; do patch -p1 <$$i; done ); \
-		ln -sf ../$(CLOOPNP_DIR) kernel-np/cloop; \
+		( cd src64 && unzip ../cache/$(LSASECRETS_ARCHIVE) ); \
 	fi
 
 	# cloop64
@@ -304,28 +134,6 @@ configure-stamp:
 		ln -sf ../$(CLOOP64_DIR) kernel64/cloop; \
 	fi
 
-	# kernel
-	-@if [ ! -d $(KERNEL_DIR) ]; then \
-		( [ -e cache/$(KERNEL_ARCHIVE) ] || ( cd cache && wget $(KERNEL_URL)/$(KERNEL_ARCHIVE) ) ); \
-		( cd cache && grep $(KERNEL_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking 32bit $(KERNEL_ARCHIVE)...[0m" ; \
-		tar xf cache/$(KERNEL_ARCHIVE) -C kernel; \
-		echo "[1mPatching kernel sources...[0m" ; \
-		( cd $(KERNEL_DIR) && for i in ../../patches/linux/*; do patch -p1 <$$i; done ); \
-		cp conf/kernel.conf $(KERNEL_DIR)/.config; \
-	fi
-
-	# kernel non pae
-	-@if [ ! -d $(KERNELNP_DIR) ]; then \
-		( [ -e cache/$(KERNEL_ARCHIVE) ] || ( cd cache && wget $(KERNEL_URL)/$(KERNEL_ARCHIVE) ) ); \
-		( cd cache && grep $(KERNEL_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking 32bit non pae $(KERNEL_ARCHIVE)...[0m" ; \
-		tar xf cache/$(KERNEL_ARCHIVE) -C kernel-np; \
-		echo "[1mPatching non pae kernel sources...[0m" ; \
-		( cd $(KERNELNP_DIR) && for i in ../../patches/linux/*; do patch -p1 <$$i; done ); \
-		cp conf/kernel-np.conf $(KERNELNP_DIR)/.config; \
-	fi
-
 	# kernel64
 	-@if [ ! -d $(KERNEL64_DIR) ]; then \
 		( [ -e cache/$(KERNEL_ARCHIVE) ] || ( cd cache && wget $(KERNEL_URL)/$(KERNEL_ARCHIVE) ) ); \
@@ -335,48 +143,6 @@ configure-stamp:
 		cp conf/kernel64.conf $(KERNEL64_DIR)/.config; \
 	fi
 
-	# backports
-#	-@if [ ! -d $(BACKPORTS_DIR) ]; then \
-#		( [ -e cache/$(BACKPORTS_ARCHIVE) ] || ( cd cache && wget $(BACKPORTS_URL)/$(BACKPORTS_ARCHIVE) ) ); \
-#		( cd cache && grep $(BACKPORTS_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-#		echo "[1mUnpacking $(BACKPORTS_ARCHIVE)...[0m" ; \
-#		tar xf cache/$(BACKPORTS_ARCHIVE) -C kernel; \
-#		ln -sf ../$(BACKPORTS_DIR) kernel/backports; \
-#	fi
-
-	# backports non pae
-#	-@if [ ! -d $(BACKPORTSNP_DIR) ]; then \
-#		( [ -e cache/$(BACKPORTS_ARCHIVE) ] || ( cd cache && wget $(BACKPORTS_URL)/$(BACKPORTS_ARCHIVE) ) ); \
-#		( cd cache && grep $(BACKPORTS_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-#		echo "[1mUnpacking $(BACKPORTS_ARCHIVE)...[0m" ; \
-#		tar xf cache/$(BACKPORTS_ARCHIVE) -C kernel-np; \
-#		ln -sf ../$(BACKPORTSNP) kernel-np/backports; \
-#	fi
-
-	# backports64
-#	-@if [ ! -d $(BACKPORTS64_DIR) ]; then \
-#		( [ -e cache/$(BACKPORTS_ARCHIVE) ] || ( cd cache && wget $(BACKPORTS_URL)/$(BACKPORTS_ARCHIVE) ) ); \
-#		( cd cache && grep $(BACKPORTS_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-#		echo "[1mUnpacking $(BACKPORTS_ARCHIVE)...[0m" ; \
-#		tar xf cache/$(BACKPORTS_ARCHIVE) -C kernel64; \
-#		ln -sf ../$(BACKPORTS64_DIR) kernel64/backports; \
-#	fi
-
-	# 32bit binaries
-	echo "[1mInstalling 32bit binaries...[0m"
-	for i in $(BIN32_DEBS) ; do \
-		pkg=`ls -1tr cache/$${i}_*_i386.deb | tail -1` ; \
-		if [ -z $$pkg ]; then \
-			( cd cache ; echo "[1mDownloading $${i}:i386 ...[0m" ; apt-get download $${i}:i386 ) ; \
-			rm -rf $(BIN32_DIR)/usr/share/doc/$$i ; \
-		fi ; \
-		if [ ! -d $(BIN32_DIR)/usr/share/doc/$$i ]; then \
-			pkg=`ls -1tr cache/$${i}_*_i386.deb | tail -1` ; \
-			echo "[1mUnpacking $$pkg ...[0m" ; \
-			dpkg -x $$pkg $(BIN32_DIR) ; \
-		fi ; \
-	done
-
 	touch configure-stamp
 
 build: build-stamp
@@ -385,28 +151,10 @@ build-stamp: configure-stamp
 
 	# build src components
 
-	# busybox
-	-@if [ ! -e $(BB_DIR)/_install/bin/busybox ]; then \
-		echo "[1mBuilding busybox...[0m" ; \
-		( cd $(BB_DIR) && PATH=$(TOOLCHAIN):$(PATH) ARCH=i386 CFLAGS=-m32 CROSS_COMPILE=i386-linux-gnu- make install ); \
-	fi
-
 	# busybox64
 	-@if [ ! -e $(BB64_DIR)/_install/bin/busybox ]; then \
 		echo "[1mBuilding 64bit busybox...[0m" ; \
 		( cd $(BB64_DIR) && make install ); \
-	fi
-
-	# ms-sys
-	-@if [ ! -e $(MSSYS_DIR)/bin/ms-sys ]; then \
-		echo "[1mBuilding ms-sys...[0m" ; \
-		( cd $(MSSYS_DIR) && PATH=$(TOOLCHAIN):$(PATH) CFLAGS=-m32 make && strip bin/ms-sys ); \
-	fi
-
-	# chntpw
-	-@if [ ! -e $(CHNTPW_DIR)/reged ]; then \
- 		echo "[1mBuilding reged...[0m"; \
-		( cd $(CHNTPW_DIR) && PATH=$(TOOLCHAIN):$(PATH) CFLAGS=-m32 make reged && strip reged ); \
 	fi
 
 	# chntpw64
@@ -415,73 +163,10 @@ build-stamp: configure-stamp
 		( cd $(CHNTPW64_DIR) && make reged && strip reged ); \
 	fi
 
-	# ntfs-3g
-	-@if [ ! -e $(NTFS3G_DIR)/ntfsprogs/.libs/ntfssecaudit ]; then \
-		echo "[1mBuilding ntfs-3g...[0m" ; \
-		( cd $(NTFS3G_DIR) && export PATH=$(TOOLCHAIN):$(PATH) && ARCH=i386 CFLAGS=-m32 ./configure --host=i386-linux-gnu --enable-xattr-mappings --enable-posix-acls && make && make extra && strip src/.libs/ntfs-3g && strip ntfsprogs/.libs/mkntfs && strip ntfsprogs/.libs/ntfsclone && strip ntfsprogs/.libs/ntfslabel && strip ntfsprogs/.libs/ntfsresize && strip ntfsprogs/.libs/ntfssecaudit && strip libntfs-3g/.libs/libntfs-3g.so.88 ); \
-	fi
-
 	# ntfs-3g64
 	-@if [ ! -e $(NTFS3G64_DIR)/ntfsprogs/.libs/ntfssecaudit ]; then \
 		echo "[1mBuilding 64bit ntfs-3g...[0m" ; \
 		( cd $(NTFS3G64_DIR) && ./configure --enable-xattr-mappings --enable-posix-acls && make && make extra && strip src/.libs/ntfs-3g && strip ntfsprogs/.libs/mkntfs && strip ntfsprogs/.libs/ntfsclone && strip ntfsprogs/.libs/ntfslabel && strip ntfsprogs/.libs/ntfsresize && strip ntfsprogs/.libs/ntfssecaudit && strip libntfs-3g/.libs/libntfs-3g.so.88 ); \
-	fi
-
-	# qt32
-	-@if [ ! -e $(QT_DIR)/bin/moc ]; then \
-		echo "[1mBuilding 32bit QT...[0m" ; \
-		( cd $(CURDIR)/linbo_gui32 && PATH=$(TOOLCHAIN):$(PATH) ./build_qt && rm linbo_gui ); \
-	fi
-
-	# qt64
-	-@if [ ! -e $(QT64_DIR)/bin/moc ]; then \
-		echo "[1mBuilding 64bit QT...[0m" ; \
-		( cd $(CURDIR)/linbo_gui64 && ./build_qt && rm linbo_gui ); \
-	fi
-
-	# linbo_gui32
-	-@if [ ! -e $(CURDIR)/linbo_gui32/linbo_gui ]; then \
-		echo "[1mBuilding 32bit linbo_gui...[0m" ; \
-		cp var/icons/linbo_wallpaper_800x600.png linbo_gui32/icons/linbo_wallpaper.png ; \
-		rm -f $(GUI32_ARCHIVE) ; \
-		( cd linbo_gui32 && PATH=$(TOOLCHAIN):$(PATH) CFLAGS=-m32 ./build_gui ); \
-	fi
-
-	# linbo_gui64
-	-@if [ ! -e $(CURDIR)/linbo_gui64/linbo_gui ]; then \
-		echo "[1mBuilding 64bit linbo_gui...[0m" ; \
-		cp var/icons/linbo_wallpaper_800x600.png linbo_gui64/icons/linbo_wallpaper.png ; \
-		rm -f $(GUI64_ARCHIVE) ; \
-		( cd linbo_gui64 && ./build_gui ); \
-	fi
-
-	# create gui archives
-	debian/mkguiarchives.sh
-
-	# linbo kernel
-	-@if [ ! -e $(KERNEL_DIR)/vmlinux ]; then \
-	        echo "[1mBuilding LINBO kernel...[0m" ; \
-	        rm -f $(CLOOP_DIR)/cloop.ko || true ; \
-	        rm -rf ../modules/* || true ; \
-	        cd $(KERNEL_DIR) ; \
-	        ln -snf ../initramfs_kernel.conf . ; \
-	        :> ../initramfs_kernel.conf ; \
-	        rm -f usr/initramfs_data.cpio.gz || true ; \
-	        cat $(CURDIR)/conf/initramfs_kernel.conf > ../initramfs_kernel.conf ; \
-	        ARCH=i386 CFLAGS=-m32 make -j2 bzImage modules ; \
-	fi
-
-	# linbo kernel non pae
-	-@if [ ! -e $(KERNELNP_DIR)/vmlinux ]; then \
-	        echo "[1mBuilding non pae LINBO kernel...[0m" ; \
-	        rm -f $(CLOOPNP_DIR)/cloop.ko || true ; \
-	        rm -rf ../modules/* || true ; \
-	        cd $(KERNELNP_DIR) ; \
-	        ln -snf ../initramfs_kernel.conf . ; \
-	        :> ../initramfs_kernel.conf ; \
-	        rm -f usr/initramfs_data.cpio.gz || true ; \
-	        cat $(CURDIR)/conf/initramfs_kernel.conf > ../initramfs_kernel.conf ; \
-	        ARCH=i386 CFLAGS=-m32 make -j2 bzImage modules ; \
 	fi
 
 	# linbo kernel64
@@ -497,22 +182,6 @@ build-stamp: configure-stamp
 	        ARCH=x86_64 make -j2 bzImage modules ; \
 	fi
 
-	# cloop module
-	-@if [ ! -e $(CLOOP_DIR)/cloop.ko ]; then \
-	        echo "[1mBuilding cloop module...[0m" ; \
-	        rm -f kernel/modules/lib/modules/*/kernel/drivers/block/cloop.ko || true ; \
-	        cd $(CLOOP_DIR) && \
-	        ( make KERNEL_DIR=$(CURDIR)/$(KERNEL_DIR) clean ; PATH=$(TOOLCHAIN):$(PATH) ARCH=i386 CFLAGS=-m32 make KERNEL_DIR=$(CURDIR)/$(KERNEL_DIR) cloop.ko ) ; \
-	fi
-
-	# cloop non pae module
-	-@if [ ! -e $(CLOOPNP_DIR)/cloop.ko ]; then \
-	        echo "[1mBuilding non pae cloop module...[0m" ; \
-	        rm -f kernel-np/modules/lib/modules/*/kernel/drivers/block/cloop.ko || true ; \
-	        cd $(CLOOPNP_DIR) && \
-	        ( make KERNEL_DIR=$(CURDIR)/$(KERNELNP_DIR) clean ; PATH=$(TOOLCHAIN):$(PATH) ARCH=i386 CFLAGS=-m32 make KERNEL_DIR=$(CURDIR)/$(KERNELNP_DIR) cloop.ko ) ; \
-	fi
-
 	# cloop64 module
 	-@if [ ! -e $(CLOOP64_DIR)/cloop.ko ]; then \
 	        echo "[1mBuilding 64bit cloop module...[0m" ; \
@@ -521,52 +190,17 @@ build-stamp: configure-stamp
 	        ( make KERNEL_DIR=$(CURDIR)/$(KERNEL64_DIR) clean ; ARCH=x86_64 make KERNEL_DIR=$(CURDIR)/$(KERNEL64_DIR) cloop.ko ) ; \
 	fi
 
-	# backports
-#	-@if [ ! -e $(BACKPORTS_DIR)/drivers/net/ethernet/atheros/alx/alx.ko ]; then \
-#	        echo "ESC[1mBuilding alx module...ESC[0m" ; \
-#	        rm -f kernel/modules/lib/modules/*/kernel/drivers/net/atheros/alx || true ; \
-#	        cd $(BACKPORTS_DIR) && \
-#	        ( ARCH=i386 KLIB=$(CURDIR)/$(KERNEL_DIR) KLIB_BUILD=$(CURDIR)/$(KERNEL_DIR) make clean ; \
-#	        PATH=$(TOOLCHAIN):$(PATH) ARCH=i386 KLIB=$(CURDIR)/$(KERNEL_DIR) KLIB_BUILD=$(CURDIR)/$(KERNEL_DIR) make defconfig-alx ; \
-#	        PATH=$(TOOLCHAIN):$(PATH) ARCH=i386 KLIB=$(CURDIR)/$(KERNEL_DIR) KLIB_BUILD=$(CURDIR)/$(KERNEL_DIR) make ) ; \
-#	fi
-
-	# backports non pae
-#	-@if [ ! -e $(BACKPORTSNP_DIR)/drivers/net/ethernet/atheros/alx/alx.ko ]; then \
-#	        echo "ESC[1mBuilding non pae alx module...ESC[0m" ; \
-#	        rm -f kernel-np/modules/lib/modules/*/kernel/drivers/net/atheros/alx || true ; \
-#	        cd $(BACKPORTSNP_DIR) && \
-#	        ( ARCH=i386 KLIB=$(CURDIR)/$(KERNELNP_DIR) KLIB_BUILD=$(CURDIR)/$(KERNELNP_DIR) make clean ; \
-#	        PATH=$(TOOLCHAIN):$(PATH) ARCH=i386 KLIB=$(CURDIR)/$(KERNELNP_DIR) KLIB_BUILD=$(CURDIR)/$(KERNELNP_DIR) make defconfig-alx ; \
-#	        PATH=$(TOOLCHAIN):$(PATH) ARCH=i386 KLIB=$(CURDIR)/$(KERNELNP_DIR) KLIB_BUILD=$(CURDIR)/$(KERNELNP_DIR) make ) ; \
-#	fi
-
-	# backports64
-#	-@if [ ! -e $(BACKPORTS64_DIR)/drivers/net/ethernet/atheros/alx/alx.ko ]; then \
-#	        echo "ESC[1mBuilding 64bit alx module...ESC[0m" ; \
-#	        rm -f kernel64/modules/lib/modules/*/kernel/drivers/net/atheros/alx || true ; \
-#	        cd $(BACKPORTS64_DIR) && \
-#	        ( ARCH=x86_64 KLIB=$(CURDIR)/$(KERNEL64_DIR) KLIB_BUILD=$(CURDIR)/$(KERNEL64_DIR) make clean ; \
-#	        ARCH=x86_64 KLIB=$(CURDIR)/$(KERNEL64_DIR) KLIB_BUILD=$(CURDIR)/$(KERNEL64_DIR) make defconfig-alx ; \
-#	        ARCH=x86_64 KLIB=$(CURDIR)/$(KERNEL64_DIR) KLIB_BUILD=$(CURDIR)/$(KERNEL64_DIR) make ) ; \
-#	fi
-
 	touch build-stamp
 
 distclean: clean
 
-	rm -rf src || true
 	rm -rf src64 || true
-	rm -rf kernel || true
-	rm -rf kernel-np || true
 	rm -rf kernel64 || true
-	rm -rf linbo_gui32 || true
-	rm -rf linbo_gui64 || true
 
 clean:
 	dh_testdir
 	dh_testroot
-	rm -f build-stamp configure-stamp $(TOOLCHAIN)/i386-linux-gnu-ar $(TOOLCHAIN)/i386-linux-gnu-strip
+	rm -f build-stamp configure-stamp
 	rm -rf tmp
 	dh_clean -d
 
@@ -577,85 +211,21 @@ install: build
 	dh_installdirs
 	dh_install
 	## kernel, modules, initrd go to linuxmuster-linbo-common package
-	( cd $(KERNEL_DIR) && mkdir -p ../modules ; ARCH=i386 make INSTALL_MOD_PATH=../modules modules_install )
-	@echo "[1mLinking LINBO kernel to /var/linbo/linbo.[0m" ; \
-	cp $(KERNEL_DIR)/arch/x86/boot/bzImage $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo
-	# kernel non pae
-	( cd $(KERNELNP_DIR) && mkdir -p ../modules ; ARCH=i386 make INSTALL_MOD_PATH=../modules modules_install )
-	@echo "[1mLinking non pae LINBO kernel to /var/linbo/linbo-np.[0m" ; \
-	cp $(KERNELNP_DIR)/arch/x86/boot/bzImage $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo-np
-	# kernel64
 	( cd $(KERNEL64_DIR) && mkdir -p ../modules ; ARCH=x86_64 make INSTALL_MOD_PATH=../modules modules_install )
-	@echo "[1mLinking 64bit LINBO kernel to /var/linbo/linbo64.[0m" ; \
-	cp $(KERNEL64_DIR)/arch/x86/boot/bzImage $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo64
+	@echo "[1mLinking 64bit LINBO kernel to /srv/linbo/linbo64.[0m" ; \
+	cp $(KERNEL64_DIR)/arch/x86/boot/bzImage $(CURDIR)/debian/linuxmuster-linbo7/srv/linbo/linbo64
 	# cloop module
-	mkdir -p kernel/modules/lib/modules/$(KVERS)/kernel/drivers/block && \
-	cp $(CLOOP_DIR)/cloop.ko kernel/modules/lib/modules/$(KVERS)/kernel/drivers/block/
-	mkdir -p kernel-np/modules/lib/modules/$(KVERS)/kernel/drivers/block && \
-	cp $(CLOOPNP_DIR)/cloop.ko kernel-np/modules/lib/modules/$(KVERS)/kernel/drivers/block/
 	mkdir -p kernel64/modules/lib/modules/$(KVERS)/kernel/drivers/block && \
 	cp $(CLOOP64_DIR)/cloop.ko kernel64/modules/lib/modules/$(KVERS)/kernel/drivers/block/
-	# alx module
-	# default
-#	mkdir -p kernel/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx && \
-#	cp $(BACKPORTS_DIR)/drivers/net/ethernet/atheros/alx/alx.ko kernel/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx && \
-#	cp $(BACKPORTS_DIR)/compat/compat.ko kernel/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx
-    # non pae
-#	mkdir -p kernel-np/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx && \
-#	cp $(BACKPORTSNP_DIR)/drivers/net/ethernet/atheros/alx/alx.ko kernel-np/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx && \
-#	cp $(BACKPORTSNP_DIR)/compat/compat.ko kernel-np/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx
-    # 64bit
-#	mkdir -p kernel64/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx && \
-#	cp $(BACKPORTS64_DIR)/drivers/net/ethernet/atheros/alx/alx.ko kernel64/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx && \
-#	cp $(BACKPORTS64_DIR)/compat/compat.ko kernel64/modules/lib/modules/$(KVERS)/kernel/drivers/net/atheros/alx
 	# depmod
-	-/sbin/depmod -a -b kernel/modules $(KVERS)
-	-/sbin/depmod -a -b kernel-np/modules $(KVERS)
 	-/sbin/depmod -a -b kernel64/modules $(KVERS)
 	# initrd build
 	# linbo version & codename
 	echo "LINBO $(LVERS): $(LRELNAME)" > linbofs/etc/linbo-version
+
 	# fetch common linbofs files
 	( cd linbofs && find . -type d -printf "dir %p %m 0 0\n" && find . -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|dir \./|dir /|g' -e 's|file \./|file /|g' -e 's|\./|\.\./\.\./linbofs/|g' >$(LINBOINITRAMFS)
-	# start building x86 linbofs
-	@echo "[1mBuilding LINBOFS...[0m" ; \
-	cd $(KERNEL_DIR) ; \
-	ln -snf ../initramfs.conf . ; \
-	:> ../initramfs.conf ; \
-	cat $(CURDIR)/conf/initramfs.conf > ../initramfs.conf ; \
-	echo >> ../initramfs.conf ; \
-	echo "# grub2 boot images" >> $(CURDIR)/kernel/initramfs.conf ; \
-	( cd /usr/lib/grub/i386-pc && find . -maxdepth 1 -name "*" -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/usr/lib/grub/i386-pc/|' | sed -e "s|\./|../../src/bin32/usr/lib/grub/i386-pc/|" >>$(CURDIR)/kernel/initramfs.conf ; \
-	( cd /usr/lib/grub/i386-efi && find . -maxdepth 1 -name "*" -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/usr/lib/grub/i386-efi/|' | sed -e "s|\./|../../src/bin32/usr/lib/grub/i386-efi/|" >>$(CURDIR)/kernel/initramfs.conf ; \
-	echo "# udev" >> ../initramfs.conf ; \
-	( find /etc/udev -type d -printf "dir %p %m 0 0\n" && find /etc/udev -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel/initramfs.conf ; \
-	( cd ../../src/bin32 && find ./lib/udev -type d -printf "dir %p %m 0 0\n" && find ./lib/udev -type f -printf "file %p ../../src/bin32/%p %m 0 0\n" ) | sed -e 's| \./| /|g' >>$(CURDIR)/kernel/initramfs.conf ; \
-	echo "# modules" >> ../initramfs.conf ; \
-	( cd ../modules && find . -type d -printf "dir %p %m 0 0\n" && find . -type f -printf "file %p .../modules%p %m 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel/initramfs.conf ; \
-	echo >> ../initramfs.conf ; \
-	echo "# busybox applets" >> ../initramfs.conf ; \
-	( cd $(CURDIR)/$(BB_DIR)/_install && find . -type d -printf "dir %p %m 0 0\n" && find . -type l -printf "slink %p /bin/busybox 777 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel/initramfs.conf ; \
-	cat $(LINBOINITRAMFS) >>$(CURDIR)/kernel/initramfs.conf ; \
-	rm -f initramfs.lz ; ./usr/gen_init_cpio ../initramfs.conf | lzma -zcv > $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbofs.lz
-	# start building x86 non pae linbofs
-	@echo "[1mBuilding non pae LINBOFS...[0m" ; \
-	cd $(KERNELNP_DIR) ; \
-	ln -snf ../initramfs.conf . ; \
-	:> ../initramfs.conf ; \
-	cat $(CURDIR)/conf/initramfs.conf > ../initramfs.conf ; \
-	echo >> ../initramfs.conf ; \
-	echo "# grub2 boot images" >> $(CURDIR)/kernel/initramfs.conf ; \
-	( cd /usr/lib/grub/i386-pc && find . -maxdepth 1 -name "*" -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/usr/lib/grub/i386-pc/|' | sed -e "s|\./|../../src/bin32/usr/lib/grub/i386-pc/|" >>$(CURDIR)/kernel-np/initramfs.conf ; \
-	echo "# udev" >> ../initramfs.conf ; \
-	( find /etc/udev -type d -printf "dir %p %m 0 0\n" && find /etc/udev -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel-np/initramfs.conf ; \
-	( cd ../../src/bin32 && find ./lib/udev -type d -printf "dir %p %m 0 0\n" && find ./lib/udev -type f -printf "file %p ../../src/bin32/%p %m 0 0\n" ) | sed -e 's| \./| /|g' >>$(CURDIR)/kernel-np/initramfs.conf ; \
-	echo "# modules" >> ../initramfs.conf ; \
-	( cd ../modules && find . -type d -printf "dir %p %m 0 0\n" && find . -type f -printf "file %p .../modules%p %m 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel-np/initramfs.conf ; \
-	echo >> ../initramfs.conf ; \
-	echo "# busybox applets" >> ../initramfs.conf ; \
-	( cd $(CURDIR)/$(BB_DIR)/_install && find . -type d -printf "dir %p %m 0 0\n" && find . -type l -printf "slink %p /bin/busybox 777 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel-np/initramfs.conf ; \
-	cat $(LINBOINITRAMFS) >>$(CURDIR)/kernel-np/initramfs.conf ; \
-	rm -f initramfs.lz ; ./usr/gen_init_cpio ../initramfs.conf | lzma -zcv > $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbofs-np.lz
+
 	# start building 64bit linbofs
 	@echo "[1mBuilding 64bit LINBOFS...[0m" ; \
 	cd $(KERNEL64_DIR) ; \
@@ -664,7 +234,7 @@ install: build
 	cat $(CURDIR)/conf/initramfs64.conf > ../initramfs.conf ; \
 	echo >> ../initramfs.conf ; \
 	echo "# grub2 boot images" >> $(CURDIR)/kernel64/initramfs.conf ; \
-	( cd /usr/lib/grub/i386-pc && find . -maxdepth 1 -name "*" -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/usr/lib/grub/i386-pc/|' | sed -e "s|\./|../../src/bin32/usr/lib/grub/i386-pc/|" >>$(CURDIR)/kernel64/initramfs.conf ; \
+	( cd /usr/lib/grub/i386-pc && find . -maxdepth 1 -name "*" -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/usr/lib/grub/i386-pc/|' | sed -e "s|\./|/usr/lib/grub/i386-pc/|" >>$(CURDIR)/kernel64/initramfs.conf ; \
 	( cd /usr/lib/grub/x86_64-efi && find . -maxdepth 1 -name "*" -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/usr/lib/grub/x86_64-efi/|' | sed -e "s|\./|/usr/lib/grub/x86_64-efi/|" >>$(CURDIR)/kernel64/initramfs.conf ; \
 	echo "# udev" >> ../initramfs.conf ; \
 	( find /etc/udev -type d -printf "dir %p %m 0 0\n" && find /etc/udev -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel64/initramfs.conf ; \
@@ -675,66 +245,18 @@ install: build
 	echo "# busybox applets" >> ../initramfs.conf ; \
 	( cd $(CURDIR)/$(BB64_DIR)/_install && find . -type d -printf "dir %p %m 0 0\n" && find . -type l -printf "slink %p /bin/busybox 777 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel64/initramfs.conf ; \
 	cat $(LINBOINITRAMFS) >>$(CURDIR)/kernel64/initramfs.conf ; \
-	rm -f initramfs.lz ; ./usr/gen_init_cpio ../initramfs.conf | lzma -zcv > $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbofs64.lz
+	rm -f initramfs.lz ; ./usr/gen_init_cpio ../initramfs.conf | lzma -zcv > $(CURDIR)/debian/linuxmuster-linbo7/srv/linbo/linbofs64.lz
+
 	### scripts and config files to package
-	# linbo md5sums
-	md5sum $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo | cut -f1 -d" " > $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo.md5
-	md5sum $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo-np | cut -f1 -d" " > $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo-np.md5
-	md5sum $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo64 | cut -f1 -d" " > $(CURDIR)/debian/linuxmuster-linbo-common/var/linbo/linbo64.md5
+	md5sum $(CURDIR)/debian/linuxmuster-linbo7/srv/linbo/linbo64 | cut -f1 -d" " > $(CURDIR)/debian/linuxmuster-linbo7/srv/linbo/linbo64.md5
 
-	## linuxmuster-linbo-common
-	# /var/linbo
-	cp -a files/common/* debian/linuxmuster-linbo-common
-	install -m 644 linbofs/etc/linbo-version debian/linuxmuster-linbo-common/var/linbo
-	install -m 644 src/lsaSecrets-master/bin/lsaSecretStore.exe debian/linuxmuster-linbo-common/var/linbo/linuxmuster-win
-	install -m 644 files/common/usr/share/linuxmuster-linbo/templates/grub.cfg.pxe debian/linuxmuster-linbo-common/var/linbo/boot/grub/grub.cfg
-	# gui32
-	install -m 644 $(GUI32_ARCHIVE) debian/linuxmuster-linbo-common/var/linbo
-	install -m 644 $(GUI32_ARCHIVE).md5 debian/linuxmuster-linbo-common/var/linbo
-	# gui64
-	install -m 644 $(GUI64_ARCHIVE) debian/linuxmuster-linbo-common/var/linbo
-	install -m 644 $(GUI64_ARCHIVE).md5 debian/linuxmuster-linbo-common/var/linbo
-
-	# linuxmuster-linbo-common7
-	cp -a debian/linuxmuster-linbo-common/* debian/linuxmuster-linbo-common7/
-	# var -> srv
-	mkdir -p debian/linuxmuster-linbo-common7/srv
-	rm -rf debian/linuxmuster-linbo-common7/srv/linbo
-	mv debian/linuxmuster-linbo-common7/var/linbo debian/linuxmuster-linbo-common7/srv
-	rm -rf debian/linuxmuster-linbo-common7/var
-	# linuxmuster-linbo -> linuxmuster/linbo
-	mkdir -p debian/linuxmuster-linbo-common7/usr/share/linuxmuster/linbo/
-	mv debian/linuxmuster-linbo-common7/usr/share/linuxmuster-linbo/* debian/linuxmuster-linbo-common7/usr/share/linuxmuster/linbo/
-	rm -rf debian/linuxmuster-linbo-common7/usr/share/linuxmuster-linbo
-
-	# create grub netboot for lmn6
-	debian/mkgrubnetdir.sh
-	install -m 644 /boot/ipxe.lkrn debian/linuxmuster-linbo-common/var/linbo/boot/grub/ipxe.lkrn
-	install -m 644 /boot/ipxe.efi debian/linuxmuster-linbo-common/var/linbo/boot/grub/ipxe.efi
-
-	## linuxmuster-linbo
-	install -m 755 debian/linbo-bittorrent.init debian/linuxmuster-linbo/etc/init.d/linbo-bittorrent
-	install -m 755 debian/linbo-multicast.init debian/linuxmuster-linbo/etc/init.d/linbo-multicast
-	install -m 644 debian/linbo-bittorrent.default debian/linuxmuster-linbo/etc/default/linbo-bittorrent
-	install -m 644 debian/linbo-multicast.default debian/linuxmuster-linbo/etc/default/linbo-multicast
-	# moved to common
-	#cp -r files/common/etc/* debian/linuxmuster-linbo/etc/
-	#cp -r files/common/usr/* debian/linuxmuster-linbo/usr/
-	#cp -r files/lmn6/usr/* debian/linuxmuster-linbo/usr/
-	cp -r files/lmn6/* debian/linuxmuster-linbo/
-	# grub tools
-	cp /usr/bin/grub-mkstandalone debian/linuxmuster-linbo/usr/share/linuxmuster-linbo
-	cp /usr/bin/grub-mkimage debian/linuxmuster-linbo/usr/share/linuxmuster-linbo
-
-	## linuxmuster-linbo7
+	## install supplemental files
+	cp -a files/* debian/linuxmuster-linbo7
+	install -m 644 linbofs/etc/linbo-version debian/linuxmuster-linbo7/srv/linbo
+	install -m 644 src64/lsaSecrets-master/bin/lsaSecretStore.exe debian/linuxmuster-linbo7/srv/linbo/linuxmuster-win
 	install -m 644 debian/linbo-multicast.default debian/linuxmuster-linbo7/etc/default/linbo-multicast
 	install -m 644 debian/linbo-bittorrent.default debian/linuxmuster-linbo7/etc/default/linbo-bittorrent
 	install -m 644 debian/logrotate debian/linuxmuster-linbo7/etc/logrotate.d/linuxmuster-linbo7
-	#cp -r files/common/etc/* debian/linuxmuster-linbo7/etc/
-	#cp -r files/common/usr/share/linuxmuster-linbo/* debian/linuxmuster-linbo7/usr/share/linuxmuster/linbo/
-	#cp -r files/lmn7/usr/* debian/linuxmuster-linbo7/usr/
-	#cp -r files/lmn7/etc/* debian/linuxmuster-linbo7/etc/
-	cp -a files/lmn7/* debian/linuxmuster-linbo7/
 	chmod 755 debian/linuxmuster-linbo7/etc/init.d/*
 
 # Build architecture-independent files here.
