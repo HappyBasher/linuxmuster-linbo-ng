@@ -8,7 +8,7 @@
 # ssd/4k/8k support - jonny@bzt.de 06.11.2012 anpassung fuer 2.0.12
 #
 # thomas@linuxmuster.net
-# 20210221
+# 20210310
 # GPL v3
 #
 
@@ -141,6 +141,7 @@ bailout(){
   umount /cache >/dev/null 2>&1 || umount -l /cache >/dev/null 2>&1
   umount /cloop >/dev/null 2>&1 || umount -l /cloop >/dev/null 2>&1
   rmmod cloop >/dev/null 2>&1
+  umount /qcow2 >/dev/null 2>&1 || umount -l /qcow2 >/dev/null 2>&1
   rm -f "$TMP"
   echo "Abgebrochen." >&2
   echo "" >&2
@@ -176,7 +177,8 @@ help(){
   syncl cachedev baseimage image bootdev rootdev kernel initrd
                - Synchronisiere Partitionen vom Cache
 
-  Image-Arten:
+  image variants:
+  .qcow2 - compressed partition image in qemu's qcow2 format.
   .cloop - Image vom kompletten Blockgeraet (block device, z.B. Partition), CLOOP-komprimiert
   .rsync - Differentielles RSYNC-Abbild, CLOOP-komprimiert
   " 1>&2
@@ -855,9 +857,9 @@ mk_parted(){
   done < "$table"
 
   if [ "$RC" = "0" ]; then
-    echo "Partitionierung von $disk erfolgreich beendet!"
+    echo "Finished partitioning of $disk successfully!"
   else
-    echo "Partitionierung von $disk fehlerhaft! Details siehe $(hostname)_linbo.log."
+    echo "Failed to partition $disk! For details see $(hostname)_linbo.log."
   fi
   return "$RC"
 }
@@ -1165,11 +1167,11 @@ mk_winefiboot(){
         mkdir -p "$win_efidir"
       fi
       # copy whole windows efi stuff to efi partition
-      echo "Stelle Windows-Bootdateien auf EFI-Partition wieder her."
+      echo "Restoring windows bootfiles on efi partition."
       rsync -r "$win_bootdir/" "$win_efidir/"
     fi
   else
-    echo "Kann Windows-EFI-Bootdateien nicht restaurieren."
+    echo "Failed to restore windows efi bootfiles."
     RC="1"
   fi
   # create efi bootloader entry if missing
@@ -1426,17 +1428,14 @@ invoke_macct(){
   [ -z "$serverip" ] && return
   [ -s /mnt/.linbo ] || return
   local image="$(cat /mnt/.linbo)"
-  local macctfile
-  if [ -e "/cache/${image}.rsync" ]; then
-    macctfile="${image}.rsync.macct"
-  elif [ -e "/cache/${image}.cloop" ]; then
-    macctfile="${image}.cloop.macct"
+  local macct
+  if grep -i ^baseimage /start.conf | grep -q "$image.cloop"; then
+    macct="$image.cloop.macct"
   else
-    return
+    macct="$image.macct"
   fi
-  echo "Setting machine password on $serverip ..."
-  download "$serverip" "$macctfile"
-  remote_cache "$(cachedev)" || rm -f "/cache/$macctfile"
+  echo "Initiating machine password update on server $serverip ..."
+  download "$serverip" "$macct"
 }
 
 # do_machinepw (not used)
@@ -1610,16 +1609,16 @@ save_efi_bcd(){
   mount "$efipart" "$efimnt" || return 1
   local sourcedir="$(ls -d "$efimnt"/[Ee][Ff][Ii]/[Mm][Ii][Cc][Rr][Oo][Ss][Oo][Ff][Tt]/[Bb][Oo][Oo][Tt] 2> /dev/null)"
   if [ -z "$sourcedir" ]; then
-    echo "$sourcedir nicht vorhanden. Kann Windows-EFI-Bootdateien nicht nach $targetdir kopieren."
+    echo "$sourcedir not found. Cannot copy windows efi bootfiles to $targetdir."
     umount "$efimnt" || umount -l "$efimnt"
     return 1
   fi
-  echo "Kopiere Windows-EFI-Bootdateien von $sourcedir nach $targetdir."
+  echo "Copying windows efi bootfiles from $sourcedir to $targetdir."
   mkdir -p "$targetdir"
   local RC=0
   rsync -r "$sourcedir/" "$targetdir/" || RC="1"
   umount "$efimnt" || umount -l "$efimnt"
-  [ "$RC" = "1" ] && echo "Fehler beim Kopieren der Windows-EFI-Bootdateien."
+  [ "$RC" = "1" ] && echo "Copying of windows efi bootfiles failed!"
   return "$RC"
 }
 
@@ -1638,7 +1637,7 @@ set_guid(){
   local partition="$1"
   local guid="$2"
   [ -z "$partition" -a -z "$guid" ] && return 1
-  echo "Restauriere Partitions-GUID von $partition."
+  echo "Restoring partition guid of $partition."
   local disk="$(get_disk_from_partition "${partition}")"
   local partnr="$(echo "$partition" | sed "s|$disk||")"
   echo -e "x\nc\n$partnr\n$guid\nw\nY\n" | gdisk "$disk" &> /tmp/image.log || return 1
@@ -1664,7 +1663,7 @@ prepare_fs(){
     local efipart="$(print_efipart)"
     if [ -n "$efipart" ]; then
       # save partition uuids
-      echo "Sichere Partitions-GUIDs."
+      echo "Saving partition guids."
       print_guid "$efipart" > /mnt/.guid.efi
       print_guid "$2" > /mnt/.guid."$(basename "$2")"
       if [ "$(fstype $2)" = "ntfs" ]; then
@@ -1679,7 +1678,7 @@ prepare_fs(){
       local bcd="$(ls $targetdir/[Bb][Cc][Dd] 2> /dev/null)"
       local group="$(hostgroup)"
       if [ -n "$bcd" -a -n "$group" ]; then
-        echo "Sichere Windows-BCD fuer Gruppe $group."
+        echo "Saving windows bcd for group $group."
         # BCD group specific and partition specific on efi systems
         if [ -n "$efipart" ]; then
           cp -f "$bcd" "$bcd"."$group"."$(basename "$2")"
@@ -1692,16 +1691,16 @@ prepare_fs(){
         local disk="$(get_disk_from_partition "$2")"
         local bsmbr="$targetdir/bsmbr.$group"
         # save bootloader sectors
-        echo "Sichere Bootloadersektoren fuer Gruppe $group."
+        echo "Saving bootloader sectors for group $group."
         dd if="$disk" of="$bsmbr" bs=446 count=1 2>> /tmp/linbo.log
         # in case of gpt partition label
         if fdisk -l "$disk" | grep -q "GPT"; then
-          echo "Sichere GPT-Label fuer Gruppe $group."
+          echo "Saving gpt label for group $group."
           local gptlabel="$targetdir/gptlabel.$group"
           dd if="$disk" of="$gptlabel" bs=512 count=34 2>> /tmp/linbo.log
         fi
         # ntfs partition id
-        echo "Sichere NTFS-ID."
+        echo "Saving ntfs id."
         local ntfsid="$targetdir/ntfs.id"
         dd if="$2" of="$ntfsid" bs=8 count=1 skip=9 2>> /tmp/linbo.log
       fi
@@ -1709,129 +1708,100 @@ prepare_fs(){
   )
 }
 
-# mk_cloop type inputdev imagename baseimage [timestamp]
-mk_cloop(){
-  echo "## $(date) : Starte Erstellung von $3." | tee -a /tmp/image.log
-  #echo -n "mk_cloop " ;  printargs "$@" | tee -a /tmp/image.log
+
+# mk_qcow2 rootdev imagename
+mk_qcow2(){
+  local rootdev="$1"
+  local imagename="$2"
+  echo "## $(date) : Starting creation of $imagename." | tee -a /tmp/image.log
   # kill torrent process for this image
-  local pid="$(ps w | grep ctorrent | grep "$3.torrent" | grep -v grep | awk '{ print $1 }')"
+  local pid="$(ps w | grep ctorrent | grep "$imagename.torrent" | grep -v grep | awk '{ print $1 }')"
   [ -n "$pid" ] && kill "$pid"
   # remove torrent files
-  [ -e "/cache/$3.torrent" ] && rm "/cache/$3.torrent"
-  [ -e "/cache/$3.complete" ] && rm "/cache/$3.complete"
+  [ -e "/cache/$imagename.torrent" ] && rm -f "/cache/$imagename.torrent"
+  [ -e "/cache/$imagename.complete" ] && rm -f "/cache/$imagename.complete"
   local RC=1
-  local size="$(get_partition_size $2)"
+  local size="$(get_partition_size $rootdev)"
   if [ -z "$size" ]; then
-    echo "Cannot get size of $2!" 2>&1 | tee -a /tmp/image.log
+    echo "Cannot get size of $rootdev!" | tee -a /tmp/image.log
     return 1
   fi
-  local imgsize=0
-  case "$1" in
-    partition) # full partition dump
-      if mountpart "$2" /mnt -w 2>> /tmp/linbo.log; then
-        echo "Preparing partition $2 (size=${size}K) for compression..." | tee -a /tmp/image.log
-        prepare_fs /mnt "$2" | tee -a /tmp/image.log
-        echo "Filling empty space with 0s..." | tee -a /tmp/image.log
-        # Create nulled files of size 1GB, should work on any FS.
-        local count=0
-        while true; do
-          # tschmitt: log errors to image.log
-          #interruptible dd if=/dev/zero of="/mnt/zero$count.tmp" bs=1024k count=1000 2>/dev/null || break
-          interruptible dd if=/dev/zero of="/mnt/zero$count.tmp" bs=1024k count=1000 2>>/tmp/image.log || break
-          [ -s "/mnt/zero$count.tmp" ] || break
-          let count++
-          echo "$(du -ch /mnt/zero*.tmp | tail -1 | awk '{ print $1 }') genullt... " | tee -a /tmp/image.log
-        done
-        # Sync is asynchronous, unless started twice at least.
-        sync ; sync ; sync
-        rm -f /mnt/zero*.tmp
-        # we don't need the file list anymore
-        #echo "Dateiliste erzeugen..." | tee -a /tmp/image.log
-        #( cd /mnt/ ; find . | sed 's,^\.,,' ) > "$3".list
-        umount /mnt || umount -l /mnt
-      fi
-      echo "Starting compression of $2 -> $3 (full partition, ${size}K)." | tee -a /tmp/image.log
-      echo "create_compressed_fs -B $CLOOP_BLOCKSIZE -L 1 -t 2 -s ${size}K $2 $3" | tee -a /tmp/image.log
-      interruptible create_compressed_fs -B "$CLOOP_BLOCKSIZE" -L 1 -t 2 -s "${size}K" "$2" "$3" 2>&1 ; export RC="$?"
-      if [ "$RC" = "0" ]; then
-        # create status file
-        if mountpart "$2" /mnt -w 2>> /tmp/linbo.log; then
-          echo "${3%.cloop}" > /mnt/.linbo
-          umount /mnt || umount -l /mnt
-        fi
-        # create info file
-        imgsize="$(get_filesize $3)"
-        # Adjust uncompressed image size with one additional cloop block
-        size="$(($CLOOP_BLOCKSIZE / 1024 + $size))"
-        mk_info "$3" "$2" "$size" "$imgsize" >"$3".info
-        echo "Done." | tee -a /tmp/image.log
-        ls -l "$3"
-      else
-        echo "Creation of $3 failed. :(" | tee -a /tmp/image.log
-        return "$RC"
-      fi
-      ;;
-    differential)
-      if mountpart "$2" /mnt -w 2>> /tmp/linbo.log; then
-        rmmod cloop >/dev/null 2>&1
-        #    echo "modprobe cloop file=/cache/$4" | tee -a /tmp/image.log
-        if test -s /cache/"$4" && modprobe cloop file=/cache/"$4"; then
-          mkdir -p /cloop
-          if mountpart /dev/cloop /cloop -r 2>> /tmp/linbo.log; then
-            echo "Starting compression of $2 -> $3 (differential)." | tee -a /tmp/image.log
-            prepare_fs /mnt "$2" | tee -a /tmp/image.log
-            # determine rsync opts due to fstype
-            local type="$(fstype "$2")"
-            case $type in
-              *ntfs*) ROPTS="-HazAX" ;;
-              *vfat*) ROPTS="-rtz" ;;
-              *) ROPTS="-az" ;;
-            esac
-            interruptible rsync "$ROPTS" --exclude="/.linbo" --exclude-from="/etc/rsync.exclude" --delete --delete-excluded --log-file=/tmp/image.log --log-file-format="" --only-write-batch="$3" /mnt/ /cloop 2>&1 ; RC="$?"
-            umount /cloop
-            if [ "$RC" = "0" ]; then
-              imgsize="$(get_filesize $3)"
-              mk_info "$3" "$2" "" "$imgsize" >"$3".info
-              echo "Done." | tee -a /tmp/image.log
-              ls -l "$3"
-            else
-              echo "Creation of $3 failed. :(" | tee -a /tmp/image.log
-              return "$RC"
-            fi
-          else
-            RC="$?"
-            # DEBUG, REMOVEME
-            dmesg | tail -5 >&2
-          fi
-        else
-          echo "Image $4 cannot be mounted, which is essential for differential imaging." | tee -a /tmp/image.log
-          RC="$?"
-        fi
-        rmmod cloop >/dev/null 2>&1
-        umount /mnt || umount -l /mnt
-      else
-        RC="$?"
-      fi
-      ;;
-  esac
-  # create torrent file
-  if [ "$RC" = "0" ]; then
-    echo "Creating torrent files ..." | tee -a /tmp/image.log
-    touch "$3".complete
-    local serverip="$(grep -i ^server /start.conf | awk -F\= '{ print $2 }' | awk '{ print $1 }')"
-    ctorrent -t -u http://"$serverip":6969/announce -s "$3".torrent "$3" | tee -a /tmp/image.log
+  set -o pipefail
+  mountpart "$rootdev" /mnt -w | tee -a /tmp/linbo.log ; RC="$?"
+  set +o pipefail
+  if [ "$RC" != "0" ]; then
+    echo "Cannot mount $rootdev!"
+    return "$RC"
   fi
-  echo "## $(date) : Creation of $3 finished." | tee -a /tmp/image.log
+  echo "Preparing partition $rootdev (size=${size}K) for compression..." | tee -a /tmp/image.log
+  set -o pipefail
+  prepare_fs /mnt "$rootdev" | tee -a /tmp/image.log ; RC="$?"
+  set +o pipefail
+  if [ "$RC" != "0" ]; then
+    echo "Cannot prepare $rootdev!"
+    return "$RC"
+  fi
+  echo "Filling up partition with zeroes..." | tee -a /tmp/image.log
+  # Create nulled files of size 1GB, should work on any FS.
+  local count=0
+  while true; do
+    # tschmitt: log errors to image.log
+    interruptible dd if=/dev/zero of="/mnt/zero$count.tmp" bs=1024k count=1000 2>>/tmp/image.log || break
+    [ -s "/mnt/zero$count.tmp" ] || break
+    let count++
+    echo "$(du -ch /mnt/zero*.tmp | tail -1 | awk '{ print $1 }') zeroed ... " | tee -a /tmp/image.log
+  done
+  # remove excluded files
+  grep -v ^# /etc/rsync.exclude | while read line; do
+    [ -z "$line" ] && continue
+    [ "${line:0:1}" = " " ] && continue
+    rm -rf /mnt/$line
+  done
+  # Sync is asynchronous, unless started twice at least.
+  sync ; sync ; sync
+  rm -f /mnt/zero*.tmp
+  umount /mnt || umount -l /mnt
+  echo "Starting compression of $rootdev -> $imagefile (full partition, ${size}K)." | tee -a /tmp/image.log
+  echo "qemu-img convert -p -c -f raw -O qcow2 $rootdev $imagefile" | tee -a /tmp/image.log
+  set -o pipefail
+  interruptible qemu-img convert -p -c -f raw -O qcow2 "$rootdev" "$imagefile" | tee -a /tmp/image.log ; RC="$?"
+  set +o pipefail
+  if [ "$RC" != "0" ]; then
+    echo "Creation of $imagefile failed. :(" | tee -a /tmp/image.log
+    return "$RC"
+  fi
+  set -o pipefail
+  mountpart "$rootdev" /mnt -w | tee -a /tmp/image.log ; RC="$?"
+  set +o pipefail
+  if [ "$RC" != "0" ]; then
+    echo "Mounting of $rootdev failed. :(" | tee -a /tmp/image.log
+    return "$RC"
+  fi
+  local imagename="${imagefile%.qcow2}"
+  echo "$imagename" > /mnt/.linbo
+  umount /mnt || umount -l /mnt
+  # create info file
+  local imgsize="$(get_filesize $imagefile)"
+  # Adjust uncompressed image size with one additional cloop block
+  mk_info "$imagefile" "$rootdev"
+  echo "Done." | tee -a /tmp/image.log
+  ls -l "$rootdev"
+  # create torrent file
+  echo "Creating torrent files ..." | tee -a /tmp/image.log
+  touch "$imagefile".complete
+  local serverip="$(grep -i ^server /start.conf | awk -F\= '{ print $2 }' | awk '{ print $1 }')"
+  ctorrent -t -u http://"$serverip":6969/announce -s "$imagefile".torrent "$imagefile" | tee -a /tmp/image.log
+  echo "## $(date) : Creation of $imagefile finished." | tee -a /tmp/image.log
   return "$RC"
 }
+
 
 # check_status partition imagefile:
 # returns true if mountable & contains a version of the archive.
 check_status(){
   local RC=1
   local base="${2##*/}"
-  base="${base%.[Cc][Ll][Oo]*}"
-  base="${base%.[Rr][Ss][Yy]*}"
+  base="${base%.[CcQq][LlCc][Oo][OoWw][Pp2]}"
   mountpart "$1" /mnt -r 2>> /tmp/linbo.log || return $?
   [ -s /mnt/.linbo ] && case "$(cat /mnt/.linbo 2>/dev/null)" in *$base*) RC=0 ;; esac
   umount /mnt || umount -l /mnt
@@ -1843,11 +1813,9 @@ check_status(){
 # Add information about installed archives to partition
 update_status(){
   local base="${2##*/}"
-  base="${base%.[Cc][Ll][Oo]*}"
-  base="${base%.[Rr][Ss][Yy]*}"
+  base="${base%.[CcQq][LlCc][Oo][OoWw][Pp2]}"
   mountpart "$1" /mnt -w 2>> /tmp/linbo.log || return $?
-  case "$2" in *.[Cc][Ll][Oo]*) rm -f /mnt/.linbo ;; esac
-  echo "$base" >> /mnt/.linbo
+  echo "$base" > /mnt/.linbo
   sync; sync; sleep 1
   umount /mnt || umount -l /mnt
   return 0
@@ -1858,25 +1826,25 @@ update_status(){
 cp_cloop_ntfs(){
   local RC=1
   local targetdev="$1"
-  echo "Restauriere Partition $targetdev mit ntfsclone..." | tee -a /tmp/image.log
+  echo "Restoring partition $targetdev using ntfsclone..." | tee -a /tmp/image.log
   interruptible ntfsclone -q -f --overwrite "$targetdev" /dev/cloop 2>&1 | tee -a /tmp/image.log
   # in case of cluster referenced twice error give sync a second chance
   if (grep -i error /tmp/image.log | grep -i cluster | grep -qi 'referenced twice' && [ ! -e /tmp/.twice.done ]); then
     touch /tmp/.twice
     RC="0"
   elif grep -qi error /tmp/image.log; then
-    echo 'FEHLER!' | tee -a /tmp/image.log
+    echo 'Failed!' | tee -a /tmp/image.log
     return "$RC"
   fi
   # check if resizing is necessary
-  echo "Pruefe ob Dateisystem vergroessert werden muss..." | tee -a /tmp/image.log
+  echo "Testing whether filesytem has to be increased..." | tee -a /tmp/image.log
   # save ntfs size infos in temp file
   ntfsresize -f -i "$targetdev" 2>> /tmp/image.log > /tmp/ntfs.info
   # get volume size in mb
   local volsizemb="$(grep "Current volume size" /tmp/ntfs.info | awk -F\( '{ print $2 }' | awk '{ print $1}')"
   # test if volsizemb is an integer value
   if ! isinteger "$volsizemb"; then
-    echo "Kann Dateisystemgroesse nicht bestimmen." | tee -a /tmp/image.log
+    echo "Unable to get filesystem size." | tee -a /tmp/image.log
     return 1
   fi
   echo "Dateisystem: $volsizemb MB" | tee -a /tmp/image.log
@@ -1907,7 +1875,8 @@ cp_cloop_ntfs(){
   return "$RC"
 } # cp_cloop_ntfs
 
-# INITIAL copy
+
+# full copy
 # cp_cloop imagefile targetdev
 cp_cloop(){
   echo "## $(date) : Starte Komplettrestore von $1." | tee -a /tmp/image.log
@@ -1974,7 +1943,7 @@ sync_cloop(){
         interruptible rsync "$ROPTS" --compress --delete --log-file=/tmp/image.log --log-file-format="" --read-batch="$1" /mnt 2>&1 ; RC="$?"
         if [ "$RC" != "0" ]; then
           cat "$TMP" >&2 | tee -a /tmp/image.log
-          echo "Fehler beim Synchronisieren des differentiellen Images \"$1\" nach $2, rsync-Fehlercode: $RC." >&2 | tee -a /tmp/image.log
+          echo "Failed to syncronize differential image \"$1\" to $2, rsync returncode: $RC." >&2 | tee -a /tmp/image.log
           #sleep 5
         fi
         rm -f "$TMP"
@@ -1985,12 +1954,12 @@ sync_cloop(){
         if test -s "$1" && modprobe cloop file=/cache/"$1"; then
           mkdir -p /cloop
           if mountpart /dev/cloop /cloop -r 2>> /tmp/linbo.log; then
-            echo "Synchronisation laeuft ... bitte warten ..."
+            echo "Syncing ... please wait ..."
             interruptible rsync "$ROPTS" --exclude="/.linbo" --exclude-from="/etc/rsync.exclude" --delete --delete-excluded --log-file=/tmp/image.log --log-file-format="" /cloop/ /mnt 2>&1 ; RC="$?"
             umount /cloop
             if [ "$RC" != "0" ]; then
               cat "$TMP" >&2 | tee -a /tmp/image.log
-              echo "Fehler beim Restaurieren des Images \"$1\" nach $2, rsync-Fehlercode: $RC." >&2 | tee -a /tmp/image.log
+              echo "Failed to restore image \"$1\" to $2, rsync returncode: $RC." >&2 | tee -a /tmp/image.log
               #sleep 5
             fi
             rm -f "$TMP"
@@ -1998,11 +1967,11 @@ sync_cloop(){
             RC="$?"
             # DEBUG/REMOVEME
             dmesg | tail -5
-            echo "Fehler: /cloop kann nicht vom Image \"$1\" gemountet werden." >&2 | tee -a /tmp/image.log
+            echo "Failed: /cloop cannot be mounted by image \"$1\"." >&2 | tee -a /tmp/image.log
           fi
         else
           RC="$?"
-          echo "Fehler: Image \"$1\" fehlt oder ist defekt." >&2 | tee -a /tmp/image.log
+          echo "Failed: Image \"$1\" is missing or corrupt." >&2 | tee -a /tmp/image.log
         fi
         rmmod cloop >/dev/null 2>&1
         ;;
@@ -2017,49 +1986,157 @@ sync_cloop(){
   return "$RC"
 }
 
+
+# differential/Synced
+# sync_qcow2 imagefile targetdev
+sync_qcow2(){
+  echo "## $(date) : Starting sync from $1." | tee -a /tmp/image.log
+  # echo -n "sync_cloop " ;  printargs "$@"
+  local imagefile="$1"
+  local targetdev="$2"
+  local RC=1
+  if ! mountpart "$targetdev" /mnt -w 2>> /tmp/linbo.log; then
+    echo "Cannot mount $targetdev!"
+    return "$RC"
+  fi
+  local ROPTS="-HaAX"
+  [ "$(fstype "$targetdev")" = "vfat" ] && ROPTS="-rt"
+  # mount qcow2 image as network block device
+  set -o pipefail
+  qemu-nbd --connect /dev/nbd0 "$imagefile" | tee -a /tmp/image.log ; RC="$?"
+  set +o pipefail
+  if [ "$RC" != "0" ]; then
+    echo "Connection to $imagefile failed!" | tee -a /tmp/image.log
+    qemu-nbd --disconnect /dev/nbd0 | tee -a /tmp/image.log
+    return "$RC"
+  fi
+  mkdir -p /qcow2
+  if ! mountpart /dev/nbd0 /qcow2; then
+    echo "Mounting $imagefile failed!" | tee -a /tmp/image.log
+    qemu-nbd --disconnect /dev/nbd0 | tee -a /tmp/image.log
+    return "$RC"
+  fi
+  # sync image
+  echo "Syncing ... please wait ..."
+  set -o pipefail
+  interruptible rsync "$ROPTS" --exclude="/.linbo" --exclude-from="/etc/rsync.exclude" --delete --delete-excluded --log-file=/tmp/image.log --log-file-format="" /qcow2/ /mnt 2>&1 | tee -a /tmp/image.log ; RC="$?"
+  set +o pipefail
+  umount /qcow2
+  if [ "$RC" != "0" ]; then
+    echo "Image sync of $imagefile to $targetdev failed!" | tee -a /tmp/image.log
+  fi
+  qemu-nbd --disconnect /dev/nbd0 | tee -a /tmp/image.log
+  sync; sync; sleep 1
+  umount /mnt || umount -l /mnt
+  [ "$RC" = "0" ] && update_status "$2" "$1"
+  echo "## $(date) : Sync from $1 finished." | tee -a /tmp/image.log
+  return "$RC"
+}
+
+
+# full copy
+# cp_qcow2 imagefile targetdev
+cp_qcow2(){
+  echo "## $(date) : Starting full restore of $2 using $1." | tee -a /tmp/image.log
+  echo -n "cp_qcow2 " ;  printargs "$@" | tee -a /tmp/image.log
+  local RC=1
+  local imagefile="$1"
+  local targetdev="$2"
+  if [ ! -s "$imagefile" ]; then
+    echo "Error with $imagefile"
+    return "$RC"
+  fi
+  if [ ! -b "$targetdev" ]; then
+    echo "$targetdev is no block device!"
+    return "$RC"
+  fi
+  # check sizes
+  qemu-nbd --connect /dev/nbd0 "$imagefile" || return "$RC"
+  local s1="$(get_partition_size /dev/nbd0)"
+  local s2="$(get_partition_size $targetdev)"
+  if [ "$s1" -gt "$s2" ] 2>/dev/null; then
+    echo "Error: $imagefile (${s1}K) is bigger than partition $targetdev (${s2}K)" >&2 | tee -a /tmp/image.log
+    qemu-nbd --disconnect /dev/nbd0 | tee -a /tmp/image.log
+    return 1
+  fi
+  # restore
+  qemu-nbd --disconnect /dev/nbd0 | tee -a /tmp/image.log
+  set -o pipefail
+  interruptible qemu-img convert -p -f qcow2 -O raw "$imagefile" "$targetdev" | tee -a /tmp/image.log ; RC="$?"
+  set +o pipefail
+  if [ "$RC" != "0" ]; then
+    echo "Restore with $imagefile failed!"
+    return "$RC"
+  fi
+  # check if resize is necessary
+  if [ "$s2" -gt "$s1" ]; then
+    echo "Trying to resize filesystem on $targetdev."
+    local fstype="$(fstype_startconf "$targetdev")"
+    case "$fstype" in
+      ntfs) ntfsresize -x "$targetdev" | tee -a /tmp/image.log ;;
+      ext4)
+        e2fsck -f "$targetdev" | tee -a /tmp/image.log
+        resize2fs -f "$targetdev" | tee -a /tmp/image.log
+        ;;
+      *) ;;
+    esac
+  fi
+  update_status "$targetdev" "$imagefile" ; RC="$?"
+  echo "## $(date) : Full restore from $imagefile finished." | tee -a /tmp/image.log
+  return "$RC"
+}
+
+
 # restore imagefile targetdev [force]
 restore(){
   #echo -n "restore " ;  printargs "$@"
   local RC=1
-  local disk="${2%%[1-9]*}"
+  local imagefile="$1"
+  local targetdev="$2"
   local force="$3"
-  local fstype="$(fstype_startconf "$2")"
-  local label="$(print_partlabel "$2")"
-  echo -n "Entpacke: $1 -> $2 "
-  case "$1" in
+  local fstype="$(fstype_startconf "$targetdev")"
+  local label="$(print_partlabel "$targetdev")"
+  echo -n "Unpacking: $imagefile -> $targetdev "
+  if [ "$force" != "force" ]; then
+    check_status "$targetdev" "$imagefile" || force="force"
+  fi
+  if [ "$force" = "force" ]; then
+    echo "Forcing partition clone ..."
+    set -o pipefail
+    format "$targetdev" "$fstype" "$label" | tee -a /tmp/linbo.log ; RC="$?"
+    set +o pipefail
+    if [ "$RC" != "0" ]; then
+      echo "Formatting of $targetdev failed!"
+      return "$RC"
+    fi
+  else
+    echo "File sync ..."
+  fi
+  case "$imagefile" in
     *.[Cc][Ll][Oo]*)
-      if [ "$force" != "force" ]; then
-        check_status "$2" "$1" || force="force"
-      fi
-      if [ "$force" = "force" ]; then
-        echo "[Komplette Partition]..."
-        format "$2" "$fstype" "$label" 2>> /tmp/linbo.log || return 1
-      else
-        echo "[Datei-Sync]..."
-      fi
       if [ "$force" = "force" -a "$fstype" = "ntfs" ]; then
-        cp_cloop "$1" "$2" ; RC="$?"
+        cp_cloop "$imagefile" "$targetdev" ; RC="$?"
         if [ -e /tmp/.twice -a ! -e /tmp/.twice.done ]; then
-          echo "Referenced-Twice-Fehler bei ntfsclone, versuche Datei-Sync..."
-          sync_cloop "$1" "$2" ; RC="$?"
+          echo "Referenced twice error thrown out by ntfsclone, trying file sync..."
+          sync_cloop "$imagefile" "$targetdev" ; RC="$?"
           touch /tmp/.twice.done
         fi
       else
-        sync_cloop "$1" "$2" ; RC="$?"
+        sync_cloop "$imagefile" "$targetdev" ; RC="$?"
       fi
       ;;
-    *.[Rr][Ss][Yy]*)
-      echo "[Datei-Sync]..."
-      sync_cloop "$1" "$2" ; RC="$?"
+    *.[Qq][Cc][Oo]*)
+      if [ "$force" = "force" ]; then
+        cp_qcow2 "$imagefile" "$targetdev" ; RC="$?"
+      else
+        sync_qcow2 "$imagefile" "$targetdev" ; RC="$?"
+      fi
       ;;
   esac
   if [ "$RC" = "0" ]; then
-    # ntfsfix after sync
-    #[ "$fstype" = "ntfs" ] && ntfsfix -d "$2"
-    echo "Fertig."
+    echo "Done."
   else
-    echo "Fehler!" >&2
-    return "$RC"
+    echo "Error!"
   fi
   return "$RC"
 }
@@ -2131,7 +2208,7 @@ do_opsi(){
   [ -d "$opsidir" ] || return 0
   local opsiconf="$opsidir/opsiclientd.conf"
   [ -s "$opsiconf" ] || return 0
-  echo "Starte OPSI-Client-Konfiguration:"
+  echo "Starting opsi client configuration:"
   local ip="$(grep ^ip /tmp/dhcp.log | awk -F\' '{ print $2 }')"
   local domainname="$(grep ^domain /tmp/dhcp.log | awk -F\' '{ print $2 }' | tail -1)"
   local fqdn="$(hostname).$domainname"
@@ -2151,7 +2228,7 @@ do_opsi(){
   # request opsikey
   localmode || rsync "$serverip"::linbo/"$ip.opsikey" /tmp/opsikey
   if [ -s /tmp/opsikey ]; then
-    echo " * Host-Key heruntergeladen."
+    echo " * downloaded hostkey."
     clientkey="$(cat /tmp/opsikey)"
     # save opsi host key for offline use
     remote_cache "$(cachedev)" || cp /tmp/opsikey /cache
@@ -2161,33 +2238,33 @@ do_opsi(){
   fi
   if [ -n "$clientkey" ]; then
     # patch opsi host key & id
-    echo " * Host-Key gepatcht."
+    echo " * patched hostkey."
     sed -e "s|^host_id.*|host_id = $fqdn|" -e "s|^opsi_host_key.*|opsi_host_key = $clientkey|" -i "$opsiconf" || RC="1"
     # patch depot id
-    echo " * Depot-ID $depotid gepatcht."
+    echo " * patched depot id $depotid."
     sed -i "s|^depot_id.*|depot_id = $depotid|" "$opsiconf" || RC="1"
     # get opsi ip
     if [ -s /tmp/opsiip ]; then
       opsiip="$(cat /tmp/opsiip)"
-      echo " * IP $opsiip vom Server erhalten."
+      echo " * got ip $opsiip from server."
       # save opsi ip for offline use
       remote_cache "$(cachedev)" || cp /tmp/opsiip /cache
     elif [ -s /cache/opsiip ]; then
       # load opsi ip from cache
       opsiip="$(cat /cache/opsiip)"
-      echo " * IP $opsiip aus dem Cache geholt."
+      echo " * fetched ip $opsiip from cache."
     fi
     if [ -n "$opsiip" ]; then
-      echo " * IP $opsiip gepatcht."
+      echo " * patched ip $opsiip."
       sed -i "s|^url = https.*|url = https://$opsiip:4447/rpc|" "$opsiconf" || RC="1"
     fi
     # get opsi server cert
     if [ -s "/tmp/opsiconfd.pem" ]; then
-      echo " * Zertifikat heruntergeladen."
+      echo " * downloaded certificate."
       opsiserverpem="/tmp/opsiconfd.pem"
       remote_cache "$(cachedev)" || cp "$opsiserverpem" /cache
     elif [ -s "/cache/opsiconfd.pem" ]; then
-      echo " * Zertifikat aus dem Cache geholt."
+      echo " * fetched certificate from cache."
       opsiserverpem="/cache/opsiconfd.pem"
     fi
     # provide opsi server cert
@@ -2197,12 +2274,12 @@ do_opsi(){
     fi
     # evaluate return code
     if [ "$RC" = "0" ]; then
-      echo " * Erfolgreich beendet."
+      echo " * finished successfully."
     else
-      echo " * Aktualisierung war nicht moeglich!"
+      echo " * update was not possible!"
     fi
   else
-    echo " * Host-Key nicht verfuegbar!"
+    echo " * hostkey not available!"
   fi
   rm -f /tmp/opsikey
   # request opsi host ini update
@@ -2321,10 +2398,12 @@ syncl(){
   local disk="$(get_disk_from_partition "$rootdev")"
   local group="$(hostgroup)"
   local bootdir
+  local image="$2"
+  local force="$9"
 
   # don't sync in that case
   if [ "$1" = "$rootdev" ]; then
-    echo "Skipping local synchronisation. Image $2 will be started direct from cache."
+    echo "Skipping local synchronisation. Image $image will be started direct from cache."
     return 0
   fi
 
@@ -2332,27 +2411,21 @@ syncl(){
   echo -n "syncl " ; printargs "$@"
 
   # mount cache and sync
-  mountcache "$1" || return "$?"
+  mountcache "$1" || return 1
   cd /cache
-  local image=""
-  local i=""
-  # start syncing images
-  for i in "$2" "$3"; do
-    [ -n "$i" -a -f "$i" ] || continue
-    image="$i"
-    restore "$image" "$5" $9 ; RC="$?"
-    [ "$RC" = "0" ] || break
-    patchfile="$image.reg"
-    postsync="$image.postsync"
-  done
+  # start syncing image
+  restore "$image" "$rootdev" $force ; RC="$?"
+  local imagename="${image%.*}"
+  patchfile="$imagename.reg"
+  postsync="$imagename.postsync"
 
   # mount os partition
   if [ "$RC" = "0" ]; then
-    mountpart "$5" /mnt -w 2>> /tmp/linbo.log ; RC="$?"
+    mountpart "$rootdev" /mnt -w 2>> /tmp/linbo.log ; RC="$?"
   fi
   # return on error
   if [ "$RC" != "0" ]; then
-    echo "Cannot mount $5!" | tee -a /tmp/linbo.log
+    echo "Cannot mount $rootdev!" | tee -a /tmp/linbo.log
     sendlog
     cd /
     return "$RC"
@@ -2511,17 +2584,6 @@ syncl(){
       dd if="$ntfsid" of="$rootdev" bs=8 count=1 seek=9 2>> /tmp/linbo.log
     fi
 
-    # write partition boot sector (vfat and 32bit only)
-    if [ "$(fstype "$rootdev")" = "vfat" -a -z "$(get_64)" ]; then
-      local msopt=""
-      [ -e /mnt/[Nn][Tt][Ll][Dd][Rr] ] && msopt="-2"
-      [ -e /mnt/[Ii][Oo].[Ss][Yy][Ss] ] && msopt="-3"
-      if [ -n "$msopt" ]; then
-        echo "Writing partition boot sector." | tee -a /tmp/patch.log
-        ms-sys "$msopt" "$rootdev" | tee -a /tmp/patch.log
-      fi
-    fi
-
     # update linuxmuster-win scripts and restore windows activation
     if [ -d /cache/linuxmuster-win ]; then
       update_win "$rootdev" || RC="1"
@@ -2611,30 +2673,37 @@ syncl(){
 
 # create cachedev imagefile baseimagefile bootdev rootdev kernel initrd
 create(){
-  echo -n "create " ;  printargs "$@"
-  [ -n "$2" -a -n "$1" -a -n "$5" ] || return 1
-  mountcache "$1" || return "$?"
+  echo -n "create " ;  printargs "$@" | tee -a /tmp/image.log
+  [ -z "$1" -o -z "$5" ] && return 1
+  [ -z "$2" -a -z "$3" ] && return 1
+  if [ -n "$2" -a -n "$3" ]; then
+    if [ "$2" != "$3" ]; then
+      echo "Differential images are currently not supported!"
+      return 1
+    fi
+  fi
+  local cachedev="$1"
+  local imagefile="$2"
+  local baseimagefile="$3"
+  local rootdev="$5"
+  if ! echo "$imagefile" | grep -q ".qcow2"; then
+    echo "Only the creation of qcow2 images is currently supported!"
+    return 1
+  fi
+  mountcache "$cachedev" || return 1
   if ! cache_writable; then
-    echo "Cache-Partition ist nicht schreibbar, Abbruch." >&2 | tee -a /tmp/image.log
+    echo "Cache partition is not writable!" | tee -a /tmp/image.log
     sendlog
-    mountcache "$1" -r
+    mountcache "$cachedev" -r
     return 1
   fi
   cd /cache
   local RC="1"
-  local type="$(fstype "$5")"
-  # ntfsfix before image creation
-  #[ "$type" = "ntfs" ] && ntfsfix -d "$5"
-  echo "Erzeuge Image '$2' von Partition '$5'..." | tee -a /tmp/image.log
-  case "$2" in
-    *.[Cc][Ll][Oo]*)
-      mk_cloop partition "$5" "$2" "$3" ; RC="$?"
-      ;;
-    *.[Rr][Ss][Yy]*)
-      mk_cloop differential "$5" "$2" "$3" ; RC="$?"
-      ;;
-  esac
-  [ "$RC" = "0" ] && echo "Fertig." || echo "Fehler." >&2
+  echo "Creating image $imagefile of partition $rootdev ..." | tee -a /tmp/image.log
+  set -o pipefail
+  mk_qcow2 "$rootdev" "$imagefile"  | tee -a /tmp/image.log ; RC="$?"
+  set +o pipefail
+  [ "$RC" = "0" ] && echo "Done." || echo "Failed" | tee -a /tmp/image.log
   sendlog
   cd / ; mountcache "$1" -r
   return "$RC"
@@ -2665,16 +2734,22 @@ log_image_status(){
   sendlog image.status
 }
 
-# mk_info imagename baseimagename device_size image_size - creates timestamp file
+# mk_info imagefile rootdev - creates timestamp file
 mk_info(){
-  local timestamp=$(date +%Y%m%d%H%M)
-  log_image_status $1 $timestamp
-  echo "[$1 Info File]
-timestamp=$timestamp
-image=$1
-baseimage=$2
-partitionsize=$3
-imagesize=$4"
+  local imagefile="$1"
+  local rootdev="$2"
+  local partitionsize="$(get_partition_size "$rootdev")"
+  local imagesize="$(get_filesize "$imagefile")"
+  local timestamp="$(date +%Y%m%d%H%M)"
+  log_image_status "$imagefile" "$timestamp"
+  cat <<EOF > "$imagefile".info
+["$imagefile" Info File]
+timestamp="$timestamp"
+image="$imagefile"
+imagesize="$imagesize"
+partition="$rootdev"
+partitionsize="$partsize"
+EOF
 }
 
 # get_multicast_server file
@@ -2733,7 +2808,7 @@ torrent_watchdog(){
     line="$(tail -1 "$logfile" | awk '{ print $3 }')"
     [ -z "$line_old" ] && line_old="$line"
     if [ "$line_old" = "$line" ]; then
-      [ $c -eq 0 ] || echo -e "\nTorrent-Watchdog: Download von $image stockt seit $c Sekunden." >&2 | tee -a /tmp/image.log
+      [ $c -eq 0 ] || echo -e "\nTorrent watchdog: download of $image stalls since $c seconds." >&2 | tee -a /tmp/image.log
       c=$(($c+$int))
     else
       line_old="$line"
@@ -2743,10 +2818,10 @@ torrent_watchdog(){
   rm -f "$logfile"
   echo
   if [ "$RC" = "0" ]; then
-    echo "Image $image erfolgreich heruntergeladen." | tee -a /tmp/image.log
+    echo "Image $image downloaded successfully." | tee -a /tmp/image.log
   else
     ps w | grep -v grep | grep -q ctorrent && killall -9 ctorrent
-    echo "Download von $image wegen Zeitueberschreitung abgebrochen." >&2 | tee -a /tmp/image.log
+    echo "Cancelled download of $image because of timeout." >&2 | tee -a /tmp/image.log
   fi
   return "$RC"
 }
@@ -2818,7 +2893,7 @@ download_if_newer(){
   local RC=0
   local DOWNLOAD_ALL=""
   local IMAGE=""
-  case "$2" in *.[Cc][Ll][Oo][Oo][Pp]|*.[Rr][Ss][Yy][Nn][Cc]) IMAGE="true" ;; esac
+  case "$2" in *.[Qq][Cc][Oo][Ww][2]) IMAGE="true" ;; esac
   if [ ! -s "$2" -o ! -s "$2".info ]; then # File not there, download all
     DOWNLOAD_ALL="true"
   else
@@ -2863,9 +2938,9 @@ download_if_newer(){
       fi
     fi # dltype torrent
     # update regpatch and postsync script
-    rm -rf "$2".reg "$2".postsync
-    download_all "$1" "$2".reg >/dev/null 2>&1
-    download_all "$1" "$2".postsync >/dev/null 2>&1
+    rm -rf "$2".reg "${2%.*}".reg "$2".postsync "${2%.*}".postsync
+    download_all "$1" "${2%.*}".reg >/dev/null 2>&1
+    download_all "$1" "${2%.*}".postsync >/dev/null 2>&1
   fi
   # start torrent service for others if there is no image to download
   [ "$DLTYPE" = "torrent" -a -n "$IMAGE" -a -z "$DOWNLOAD_ALL" ] && download_torrent "$2"
@@ -2927,26 +3002,26 @@ authenticate(){
   localmode ; RC="$?"
   if [ "$RC" = "1" ]; then
     export RSYNC_PASSWORD="$3"
-    echo "Logge $2 ein auf $1..."
+    echo "Logging $2 in on $1..."
     rm -f "$TMP"
     rsync "$2@$1::linbo-upload" >/dev/null 2>"$TMP" ; RC="$?"
   elif [ -e /etc/linbo_passwd ]; then
-    echo "Authentifiziere offline ..."
+    echo "Offline authentication ..."
     md5passwd="$(echo -n "$3" | md5sum | awk '{ print $1 }')"
     linbo_md5passwd="$(cat /etc/linbo_passwd)"
     if [ "$md5passwd" = "$linbo_md5passwd" ]; then
       RC=0
     else
-      echo 'Passt nicht!' >"$TMP" ; RC=1
+      echo 'Does not match!' >"$TMP" ; RC=1
     fi
   else
-    echo 'Kann nicht lokal authentifizieren!' >"$TMP" ; RC=1
+    echo 'Unable to authenticate local!' >"$TMP" ; RC=1
   fi
   if [ "$RC" != "0" ]; then
-    echo "Fehler: $(cat "$TMP")" >&2
-    echo "Falsches Passwort oder fehlende Passwortdatei?" >&2
+    echo "Failed: $(cat "$TMP")" >&2
+    echo "Wrong password or missing password file?" >&2
   else
-    echo "Passwort OK."
+    echo "Password matches."
     # temporary workaround for password
     echo -n "$RSYNC_PASSWORD" > /tmp/linbo.passwd
   fi
@@ -2962,14 +3037,13 @@ upload(){
   local file
   local ext
   if remote_cache "$4"; then
-    echo "Cache $4 ist nicht lokal, die Datei $5 befindet sich" | tee -a /tmp/linbo.log
-    echo "hoechstwahrscheinlich bereits auf dem Server, daher kein Upload." | tee -a /tmp/linbo.log
+    echo "Cache $4 is not local, no upload for $5." | tee -a /tmp/linbo.log
     sendlog
     return 1
   fi
   # We may need this password for mountcache as well!
   export RSYNC_PASSWORD="$3"
-  mountcache "$4" || return "$?"
+  mountcache "$4" || return 1
   cd /cache
   if [ -s "$5" ]; then
     local FILES="$5"
@@ -2978,7 +3052,7 @@ upload(){
     for ext in info desc torrent; do
       [ -s "${5}.${ext}" ] && FILES="$FILES ${5}.${ext}"
     done
-    echo "Lade $FILES auf $1 hoch ..." | tee -a /tmp/linbo.log
+    echo "Uploading $FILES to $1 ..." | tee -a /tmp/linbo.log
     for file in $FILES; do
       interruptible rsync --log-file=/tmp/rsync.log --progress -Ha $RSYNC_PERMISSIONS --partial "$file" "$2@$1::linbo-upload/$file"
       # because return code is always 0 this is necessary
@@ -2997,16 +3071,16 @@ upload(){
     done
   else
     RC=1
-    echo "Die Datei $5 existiert nicht, und kann daher nicht hochgeladen werden." | tee -a /tmp/linbo.log
+    echo "File $5 does not exist." | tee -a /tmp/linbo.log
   fi
   if [ "$RC" = "0" ]; then
-    echo "Upload von $FILES nach $1 erfolgreich." | tee -a /tmp/linbo.log
+    echo "Successfully uploaded $FILES to $1." | tee -a /tmp/linbo.log
   else
-    echo "Upload von $FILES nach $1 ist fehlgeschlagen." | tee -a /tmp/linbo.log
+    echo "Failed to upload $FILES to $1." | tee -a /tmp/linbo.log
   fi
   sendlog
   cd / ; mountcache "$4" -r
-  [ "$RC" = "0" ] && echo "Upload von $FILES nach $1 erfolgreich." || echo "Upload von $FILES nach $1 ist fehlgeschlagen." >&2
+  [ "$RC" = "0" ] && echo "Successfully uploaded $FILES to $1." || echo "Failed to upload $FILES to $1." >&2
   return "$RC"
 }
 
@@ -3015,9 +3089,9 @@ upload(){
 syncr(){
   echo -n "syncr " ; printargs "$@"
   if remote_cache "$2"; then
-    echo "Cache $2 ist nicht lokal, ueberspringe Aktualisierung der Images."
+    echo "Cache $2 is not local, skipping image update."
   else
-    mountcache "$2" || return "$?"
+    mountcache "$2" || return 1
     cd /cache
     local i
     for i in "$3" "$4"; do
@@ -3081,34 +3155,34 @@ update(){
 
   # check for linbo/linbofs updates on server
   # download newer linbo/linbofs if applicable and check download
-  echo "Pruefe auf LINBO-Aktualisierungen."
+  echo "Looking for LINBO updates."
   for i in "$kernel" "$kernelfs"; do
     md5_before="" ; md5_after="" ; md5_current=""
     [ -s "$i" ] && md5_before="$(md5sum "$i" | awk '{ print $1 }')"
     rm -f "${i}.md5"
     download "$server" "${i}.md5" && md5_after="$(cat "$i".md5 2> /dev/null)"
     if [ -z "$md5_after" ]; then
-      echo "Download-Fehler bei ${i}.md5!" >&2
+      echo "Failed to download ${i}.md5!" >&2
       rm -f "$kernel" "$kernelfs" "${kernel}.md5" "${kernelfs}.md5"
       return 1
     fi
     if [ -z "$md5_before" -o "$md5_before" != "$md5_after" ]; then
       download "$server" "$i" && md5_current="$(md5sum "$i" | awk '{ print $1 }')"
       if [ "$md5_after" = "$md5_current" ]; then
-        echo "$i wurde erfolgreich aktualisiert."
+        echo "$i has been successfully updated."
         reboot="yes"
       else
-        echo "Download-Fehler bei $i!" >&2
+        echo "Failed to download $i!" >&2
         rm -f "$kernel" "$kernelfs" "${kernel}.md5" "${kernelfs}.md5"
         return 1
       fi
     else
-      echo "$i ist aktuell."
+      echo "$i is up-to-date."
     fi
   done
 
   # get group specific and local grub configs from server
-  echo "Aktualisiere GRUB-Konfiguration."
+  echo "Updating grub configuration."
   for i in boot/grub/ipxe.lkrn "boot/grub/hostcfg/$myname.cfg" "boot/grub/$group.cfg" "boot/grub/spool/$myname.$group.grub.cfg"; do
     # collect md5 sums before download
     if [ "$i" = "boot/grub/hostcfg/$myname.cfg" ]; then
@@ -3240,10 +3314,10 @@ initcache(){
     local cachefs="$(fstype_startconf "$cachedev")"
     if [ -n "$cachefs" ]; then
       echo "Formatting cache partition $cachedev ..."
-      format "$cachedev" "$cachefs" "$label" 2>> /tmp/linbo.log || return "$?"
+      format "$cachedev" "$cachefs" "$label" 2>> /tmp/linbo.log || return 1
     fi
   fi
-  mountcache "$cachedev" || return "$?"
+  mountcache "$cachedev" || return 1
   cd /cache
   shift; shift; shift
 
@@ -3254,7 +3328,7 @@ initcache(){
   # clean up obsolete image files
   used_images="$(grep -i ^baseimage /start.conf | awk -F\= '{ print $2 }' | awk '{ print $1 }')"
   used_images="$used_images $(grep -i ^image /start.conf | awk -F\= '{ print $2 }' | awk '{ print $1 }')"
-  for i in *.cloop *.rsync; do
+  for i in *.qcow2 *.cloop *.rsync; do
     [ -e "$i" ] || continue
     found=0
     for u in $used_images; do
@@ -3294,7 +3368,7 @@ initcache(){
 # readfile cachepartition filename [destinationfile]
 readfile(){
   local RC=0
-  mountcache "$1" || return "$?"
+  mountcache "$1" || return 1
   if [ -n "$3" ]; then
     cp -a /cache/"$2" "$3"
   else
@@ -3309,7 +3383,7 @@ readfile(){
 # writefile cachepartition filename [sourcefile]
 writefile(){
   local RC=0
-  mountcache "$1" -w || return "$?"
+  mountcache "$1" -w || return 1
   if cache_writable; then
     if [ -n "$3" ]; then
       cp -a "$3" /cache/"$2"
@@ -3456,7 +3530,7 @@ size(){
 # list cloop images in cache, listimages cachedev
 listimages(){
   mountcache "$1" -r || return 1
-  ls -1 /cache/*.cloop || return 1
+  ls -1 /cache/*.[cq][lc][o][ow][p2] || return 1
 }
 
 #

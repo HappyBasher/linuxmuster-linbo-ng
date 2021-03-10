@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # thomas@linuxmuster.net
-# 20200721
+# 20210310
 #
 
 # read in linuxmuster specific environment
@@ -50,7 +50,7 @@ if [ -s "$BACKUP" ]; then
   echo "Archive file ${ARCHIVE##*/} created." >&2
   # backup macct, opsi, reg, postsync files
   case "$FTYPE" in
-   *.cloop|*.rsync)
+   *.qcow2)
     for i in macct opsi reg postsync; do
      if [ -e "${FILE}.$i" ];then
       cp -fv "${FILE}.$i" "${ARCHIVE}.$i"
@@ -73,7 +73,7 @@ fi
 # do something depending on file type
 case "$FTYPE" in
 
- *.cloop|*.rsync)
+ *.qcow2)
   image="${FILE##*/}"
   # restart multicast service if image file was uploaded.
   echo "Image file $image detected. Restarting multicast service if enabled." >&2
@@ -89,7 +89,7 @@ case "$FTYPE" in
    if [ -n "$unicodepwd" ]; then
     echo "Writing samba password hash file for image $image."
     template="$LINBOTPLDIR/machineacct"
-    imagemacct="$LINBODIR/$image.macct"
+    imagemacct="$LINBODIR/${image%.*}.macct"
     sed -e "s|@@unicodepwd@@|$unicodepwd|" -e "s|@@suppcredentials@@|$suppcredentials|" "$template" > "$imagemacct"
     chmod 600 "$imagemacct"
    else

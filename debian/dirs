@@ -5,6 +5,7 @@
 /usr/lib/linuxmuster/setup.d
 /usr/share/linuxmuster/linbo/templates
 /var/cache/linuxmuster/linbo
+/var/lib/linuxmuster/linbo
 /var/log/linuxmuster/linbo
 /srv/linbo/examples
 /srv/linbo/boot/grub/themes/linbo

@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 #
 # thomas@linuxmuster.net
-# 20210224
+# 20210228
 # GPL v3
 #
 
@@ -52,16 +52,6 @@ BB_URL=$(LML_URL)
 #busybox64
 BB64_DIR=src64/$(shell echo $(BB_ARCHIVE) | sed -e 's/.tar.bz2//')
 
-# chntpw
-CHNTPW_ARCHIVE=$(shell grep chntpw- debian/md5sums.src | awk '{ print $$2 }')
-CHNTPW_URL=http://archive.linuxmuster.net/linbo-build-cache
-CHNTPW64_DIR=src64/$(shell echo $(CHNTPW_ARCHIVE)  | sed -e 's/.zip//')
-
-# ntfs-3g
-NTFS3G_ARCHIVE=$(shell grep ntfs-3g_ntfsprogs- debian/md5sums.src | awk '{ print $$2 }')
-NTFS3G_URL=http://tuxera.com/opensource
-NTFS3G64_DIR=src64/$(shell echo $(NTFS3G_ARCHIVE) | sed -e 's/.tgz//')
-
 # lsaSecrets
 LSASECRETS_ARCHIVE=$(shell grep lsaSecrets debian/md5sums.src | awk '{ print $$2 }')
 LSASECRETS_DIR=src64/$(shell echo $(LSASECRETS_ARCHIVE) | sed -e 's/.zip//')
@@ -91,26 +81,6 @@ configure-stamp:
 		( cd $(BB64_DIR) && for i in ../../patches/busybox/*; do patch -p1 <$$i; done ); \
 		cp conf/busybox64.conf $(BB64_DIR)/.config; \
 		ln -sf ../$(BB64_DIR) src64/busybox; \
-	fi
-
-	# chntpw64
-	-@if [ ! -d $(CHNTPW64_DIR) ]; then \
-		( [ -e cache/$(CHNTPW_ARCHIVE) ] || ( cd cache && wget $(CHNTPW_URL)/$(CHNTPW_ARCHIVE) ) ); \
-		( cd cache && grep $(CHNTPW_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking 64bit $(CHNTPW_ARCHIVE)...[0m" ; \
-		( cd src64 && unzip ../cache/$(CHNTPW_ARCHIVE) ); \
-		ln -sf ../$(CHNTPW64_DIR) src64/chntpw; \
-		echo "[1mPatching chntpw64 sources...[0m" ; \
-		( cd $(CHNTPW64_DIR) && for i in ../../patches/chntpw64/*; do patch -p1 <$$i; done ); \
-	fi
-
-	# ntfs-3g64
-	-@if [ ! -d $(NTFS3G64_DIR) ]; then \
-		( [ -e cache/$(NTFS3G_ARCHIVE) ] || ( cd cache && wget $(NTFS3G_URL)/$(NTFS3G_ARCHIVE) ) ); \
-		( cd cache && grep $(NTFS3G_ARCHIVE) ../debian/md5sums.src | md5sum -c ); \
-		echo "[1mUnpacking 64bit $(NTFS3G_ARCHIVE)...[0m" ; \
-		tar xf cache/$(NTFS3G_ARCHIVE) -C src64; \
-		ln -sf ../$(NTFS3G64_DIR) src64/ntfs-3g; \
 	fi
 
 	# lsaSecrets
@@ -157,25 +127,13 @@ build-stamp: configure-stamp
 		( cd $(BB64_DIR) && make install ); \
 	fi
 
-	# chntpw64
-	-@if [ ! -e $(CHNTPW64_DIR)/reged ]; then \
- 		echo "[1mBuilding 64bit reged...[0m"; \
-		( cd $(CHNTPW64_DIR) && make reged && strip reged ); \
-	fi
-
-	# ntfs-3g64
-	-@if [ ! -e $(NTFS3G64_DIR)/ntfsprogs/.libs/ntfssecaudit ]; then \
-		echo "[1mBuilding 64bit ntfs-3g...[0m" ; \
-		( cd $(NTFS3G64_DIR) && ./configure --enable-xattr-mappings --enable-posix-acls && make && make extra && strip src/.libs/ntfs-3g && strip ntfsprogs/.libs/mkntfs && strip ntfsprogs/.libs/ntfsclone && strip ntfsprogs/.libs/ntfslabel && strip ntfsprogs/.libs/ntfsresize && strip ntfsprogs/.libs/ntfssecaudit && strip libntfs-3g/.libs/libntfs-3g.so.88 ); \
-	fi
-
 	# linbo kernel64
 	-@if [ ! -e $(KERNEL64_DIR)/vmlinux ]; then \
 	        echo "[1mBuilding 64bit LINBO kernel...[0m" ; \
 	        rm -f $(CLOOP64_DIR)/cloop.ko || true ; \
 	        rm -rf ../modules/* || true ; \
 	        cd $(KERNEL64_DIR) ; \
-	        ln -snf ../initramfs_kernel.conf . ; \
+					ln -snf ../initramfs_kernel.conf . ; \
 	        :> ../initramfs_kernel.conf ; \
 	        rm -f usr/initramfs_data.cpio.gz || true ; \
 	        cat $(CURDIR)/conf/initramfs_kernel.conf > ../initramfs_kernel.conf ; \
@@ -231,7 +189,8 @@ install: build
 	cd $(KERNEL64_DIR) ; \
 	ln -snf ../initramfs.conf ./initramfs.conf ; \
 	:> ../initramfs.conf ; \
-	cat $(CURDIR)/conf/initramfs64.conf > ../initramfs.conf ; \
+	cat $(CURDIR)/conf/initramfs_kernel.conf > ../initramfs.conf ; \
+	cat $(CURDIR)/conf/initramfs64.conf >> ../initramfs.conf ; \
 	echo >> ../initramfs.conf ; \
 	echo "# grub2 boot images" >> $(CURDIR)/kernel64/initramfs.conf ; \
 	( cd /usr/lib/grub/i386-pc && find . -maxdepth 1 -name "*" -type f -printf "file %p %p %m 0 0\n" ) | sed -e 's|\./|/usr/lib/grub/i386-pc/|' | sed -e "s|\./|/usr/lib/grub/i386-pc/|" >>$(CURDIR)/kernel64/initramfs.conf ; \
@@ -245,13 +204,16 @@ install: build
 	echo "# busybox applets" >> ../initramfs.conf ; \
 	( cd $(CURDIR)/$(BB64_DIR)/_install && find . -type d -printf "dir %p %m 0 0\n" && find . -type l -printf "slink %p /bin/busybox 777 0 0\n" ) | sed -e 's|\./|/|g' >>$(CURDIR)/kernel64/initramfs.conf ; \
 	cat $(LINBOINITRAMFS) >>$(CURDIR)/kernel64/initramfs.conf ; \
-	rm -f initramfs.lz ; ./usr/gen_init_cpio ../initramfs.conf | lzma -zcv > $(CURDIR)/debian/linuxmuster-linbo7/srv/linbo/linbofs64.lz
+	rm -f initramfs.lz ; ./usr/gen_init_cpio ../initramfs.conf > $(CURDIR)/debian/linuxmuster-linbo7/var/lib/linuxmuster/linbo/linbofs64.cpio
 
-	### scripts and config files to package
+	## install files to package dir
+
+	# scripts and config files
 	md5sum $(CURDIR)/debian/linuxmuster-linbo7/srv/linbo/linbo64 | cut -f1 -d" " > $(CURDIR)/debian/linuxmuster-linbo7/srv/linbo/linbo64.md5
 
-	## install supplemental files
+	# supplemental files
 	cp -a files/* debian/linuxmuster-linbo7
+	install -m 644 files/usr/share/linuxmuster/linbo/templates/grub.cfg.pxe debian/linuxmuster-linbo7/srv/linbo/boot/grub/grub.cfg
 	install -m 644 linbofs/etc/linbo-version debian/linuxmuster-linbo7/srv/linbo
 	install -m 644 src64/lsaSecrets-master/bin/lsaSecretStore.exe debian/linuxmuster-linbo7/srv/linbo/linuxmuster-win
 	install -m 644 debian/linbo-multicast.default debian/linuxmuster-linbo7/etc/default/linbo-multicast
@@ -265,7 +227,7 @@ binary-indep: build install
 
 # Build architecture-dependent files here.
 binary-arch: build install
-	dh_testdir
+#	dh_testdir
 	dh_testroot
 	dh_installdebconf
 	dh_installdocs
@@ -289,7 +251,7 @@ binary-arch: build install
 #	dh_makeshlibs
 	dh_installdeb
 #	dh_perl
-	dh_shlibdeps
+#	dh_shlibdeps
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb -- -Zgzip

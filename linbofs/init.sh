@@ -5,7 +5,7 @@
 # License: GPL V2
 #
 # thomas@linuxmuster.net
-# 20210206
+# 20210310
 #
 
 # If you don't have a "standalone shell" busybox, enable this:
@@ -162,6 +162,7 @@ init_setup(){
   done
 
   # load modules given with loadmodules=module1,module2
+  loadmodules="$(grep -v ^# /etc/modules),$loadmodules"
   if [ -n "$loadmodules" ]; then
     loadmodules="$(echo "$loadmodules" | sed -e 's|,| |g')"
     for i in $loadmodules; do
@@ -689,12 +690,6 @@ hwsetup(){
   mkdir -p /dev/pts
   mount /dev/pts
   udevadm settle || true
-
-  #
-  # Load acpi fan and thermal modules if available, to avoid machine
-  # overheating.
-  modprobe fan >/dev/null 2>&1 || true
-  modprobe thermal >/dev/null 2>&1 || true
 
   export TERM_TYPE=pts
 
